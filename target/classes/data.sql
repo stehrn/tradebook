@@ -10,7 +10,6 @@ CREATE TABLE book (
   entity VARCHAR(250) NOT NULL
 );
 
-DROP TABLE IF EXISTS trade;
 
 INSERT INTO book (book_type, denominated, display_name, description, trader, entity) VALUES
   ('Profit Centre', 'USD', 'ATEMK01', '', 'Nik Stehr', 'PSUS'),
