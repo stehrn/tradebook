@@ -1,5 +1,7 @@
-TODOs
+# TODOs
 
    * Sort out data types
+   * Add foreign keys
    * Support bi-temporal query via: Add FROM_Z, THRU_Z, IN_Z, OUT_Z
+   
      

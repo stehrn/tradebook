@@ -1,16 +1,9 @@
 # Overview
 Design some tables to model a small trading desk. There are a few traders who each have a book, they maintain positions on a number of 
 securities, and execute trades against those positions. 
-   * Query those tables to find the current position of the firm (how long and short it is on each of the securities it trades). 
-   * Query those tables to find the ten securities to which the firm has the greatest exposure (either long or short). 
-   * Query those tables to find the trader with the highest aggregate exposure among their top five securities. 
 
-# Using embedded H2 database 
-   * Run SpringBootH2Application, 
-   * Go to http://localhost:8080/h2-console (check _JDBC URL_ is `jdbc:h2:mem:mydb`)
-
-   
 # Some terminology
+A review of trading terminology to help with understanding schemas, and some pseudo code to help understand relationships and cardinality
 
 ## What is a trade?
    * A contract to buy or sell something
@@ -92,7 +85,7 @@ Group {
       * Qty unit == tradable
       * Qty
       * Price = Price (Qty unit) * Qty
-      * Trade id's: lis tof contributing trades and associated qty
+      * Trade id's: list of contributing trades and associated qty
 
 ### Trade - makes it all happen
    * Drives change in risk/pnl
@@ -115,5 +108,45 @@ Trade Info {
 }
 
 Trade = @TradeAPI::add(Trade Info)
+```
+
+# Schema 
+see [data.sql](src/main/resources/data.sql)
+
+Note some [TODO](TODO.md) 
+
+# Sample queries
 
 ```
+--Query those tables to find the current position of the firm (how long and short it is on each of the securities it trades).
+select i.name as instrument, sum(t.quantity) as position
+from position p, 
+        trade t, 
+        instrument i
+where p.instrument_id = t.instrument_id
+and p.instrument_id = i.id 
+group by ( i.name)
+having sum(t.quantity) != 0
+order by position desc
+
+--Query those tables to find the ten securities to which the firm has the greatest exposure (either long or short).
+select top 10 i.name as instrument, sum(t.quantity) as position
+from position p, 
+        trade t, 
+        instrument i
+where p.instrument_id = t.instrument_id
+and p.instrument_id = i.id 
+group by ( i.name)
+having sum(t.quantity) != 0
+order by abs(sum(t.quantity)) desc
+
+--Query those tables to find the trader with the highest aggregate exposure among their top five securities.
+TODO
+```
+
+# Using embedded H2 database inside browser to run above sql
+   * Run SpringBootH2Application, 
+   * Go to http://localhost:8080/h2-console (check _JDBC URL_ is `jdbc:h2:mem:mydb`)
+
+#  Links to some of references used
+   * https://www.baeldung.com/spring-boot-h2-database
