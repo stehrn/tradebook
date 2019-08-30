@@ -18,7 +18,7 @@ A review of trading terminology to help with understanding schemas, and some pse
 
 ### Book - a collection of positions
    * Trade always executed between two parties. Books represent both of those parties/accounts
-   * Can have trading risk account books linked to a profit centre and customer books
+   * Can have trading risk account books linked to a traders profit centre and customer books
    * Things of interest:
       * Book type - profit centre, customer, sales (both of previous)
       * Positions
@@ -26,7 +26,7 @@ A review of trading terminology to help with understanding schemas, and some pse
       * Leaves: recursive tradables for each child
       * Price: [sum] for each leaf {price(leaf) * leaf quantity}
 
-Example book
+Example book:
 ```
 Book {
   Denominated: "USD",
@@ -38,8 +38,10 @@ Book {
   Company: "PSCO" // aka legal entity
   ...
 }
-
-Leaves("ATEMK01")
+```
+Example operations:
+```
+Leaves("ATEMK01") 
 ---
 Instrument A: 0.000654
 Instrument B: -0.00456
@@ -53,28 +55,8 @@ Price("ATEMK01")
 -0.003906
 ```
 
-### Group - one business or desk
-   * Book has one group
-   * Trader has one or more groups they can trade to
-   * Tie entitlements to groups
-
-```
-Group {
-  Group Name: "CORPBOND",
-   Group Type: "Trader",
-   Group Book Type: "Profit Centre",
-   Location: "LDN",
-   Holiday Calendar: "UK",
-   Business Name: "Corp Bonds",
-   ...
-}
-```
-
-### Tradeable - financial instrument (aka security)
-   * Trade is on one tradable
-   * Tradable should be able to price itself
-   * Knows what actions cna be done
-   * Immutable
+### Security - financial instrument 
+   * Trade is on one security
 
 ### Position - what happens when trade is booked
    * Position = total holding of a tradable in a book
@@ -82,19 +64,18 @@ Group {
    * Increments can happen in any order, will result in same qty
    * Things of interest:
       * Book name
-      * Qty unit == tradable
+      * Qty unit == security
       * Qty
       * Price = Price (Qty unit) * Qty
       * Trade id's: list of contributing trades and associated qty
 
 ### Trade - makes it all happen
    * Drives change in risk/pnl
-   * Modifies position sin two books
+   * Modifies positions in two books
    * Double entry book keeping - position effects across both books sum to zero
 
 ```
 Trade Info {
-  // trade info
   Portfolio1: "ATEMK01",
   Portfolio2: "Client A",
   Trader: "Nik Stehr",
@@ -106,8 +87,6 @@ Trade Info {
   Payment Unit: "USD"
   Unit Price: 2.3292
 }
-
-Trade = @TradeAPI::add(Trade Info)
 ```
 
 # Schema 
@@ -116,33 +95,41 @@ see [data.sql](src/main/resources/data.sql)
 Note some [TODO](TODO.md) 
 
 # Sample queries
+Been a while since I wrote any sql, a modern ORM would provide a compelling alternative
 
+## Query those tables to find the current position of the firm (how long and short it is on each of the securities it trades).
 ```
---Query those tables to find the current position of the firm (how long and short it is on each of the securities it trades).
-select i.name as instrument, sum(t.quantity) as position
+select i.name as instrument, 
+       sum(t.quantity) as position
 from position p, 
-        trade t, 
-        instrument i
+     trade t, 
+     instrument i
 where p.instrument_id = t.instrument_id
 and p.instrument_id = i.id 
-group by ( i.name)
-having sum(t.quantity) != 0
+group by (i.name)
+having position != 0
 order by position desc
+```
 
---Query those tables to find the ten securities to which the firm has the greatest exposure (either long or short).
-select top 10 i.name as instrument, sum(t.quantity) as position
+## Query those tables to find the ten securities to which the firm has the greatest exposure (either long or short). 
+Lets take exposure here to mean amount, there's an open TODO to apply fx conversion,
+we'll get away with it for test data as everything in GBP, otherwise we've be mixing up ccy's
+
+```
+select top 10 i.name as instrument, 
+       sum(t.quantity * t.unit_price) as exposure
 from position p, 
-        trade t, 
-        instrument i
+     trade t, 
+     instrument i
 where p.instrument_id = t.instrument_id
 and p.instrument_id = i.id 
-group by ( i.name)
-having sum(t.quantity) != 0
-order by abs(sum(t.quantity)) desc
-
---Query those tables to find the trader with the highest aggregate exposure among their top five securities.
-TODO
+group by (i.name)
+order by abs(sum(t.quantity * t.unit_price)) desc
 ```
+
+Query those tables to find the trader with the highest aggregate exposure among their top five securities.
+TODO
+
 
 # Using embedded H2 database inside browser to run above sql
    * Run SpringBootH2Application, 
