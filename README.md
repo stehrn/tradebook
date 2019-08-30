@@ -127,9 +127,10 @@ group by (i.name)
 order by abs(sum(t.quantity * t.unit_price)) desc
 ```
 
-Query those tables to find the trader with the highest aggregate exposure among their top five securities.
+## Query those tables to find the trader with the highest aggregate exposure among their top five securities.
 TODO
-
+```
+```
 
 # Using embedded H2 database inside browser to run above sql
    * Run SpringBootH2Application, 
