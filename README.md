@@ -97,40 +97,45 @@ Note some [TODO](TODO.md)
 # Sample queries
 Been a while since I wrote any sql, a modern ORM would provide a compelling alternative
 
-## Query those tables to find the current position of the firm (how long and short it is on each of the securities it trades).
+In all cases portfolio_a i trader book (portfolio_b is client book)
+
+## Find the current position of the firm (how long and short it is on each of the securities it trades).
 ```
-select i.name as instrument, 
-       sum(t.quantity) as position
-from position p, 
-     trade t, 
-     instrument i
-where p.instrument_id = t.instrument_id
-and p.instrument_id = i.id 
-group by (i.name)
-having position != 0
-order by position desc
+SELECT i.name          AS instrument, 
+       SUM(t.quantity) AS position 
+FROM   trade t, 
+       position p, 
+       instrument i
+WHERE  t.instrument_id = p.instrument_id 
+AND    t.portfolio_a = p.book_id
+AND    p.instrument_id = i.id     
+GROUP  BY ( instrument ) 
+HAVING position != 0 
+ORDER  BY position DESC 
 ```
 
-## Query those tables to find the ten securities to which the firm has the greatest exposure (either long or short). 
+## Find the ten securities to which the firm has the greatest exposure (either long or short). 
 Lets take exposure here to mean amount, there's an open TODO to apply fx conversion,
 we'll get away with it for test data as everything in GBP, otherwise we've be mixing up ccy's
 
 ```
-select top 10 i.name as instrument, 
-       sum(t.quantity * t.unit_price) as exposure
-from position p, 
-     trade t, 
-     instrument i
-where p.instrument_id = t.instrument_id
-and p.instrument_id = i.id 
-group by (i.name)
-order by abs(sum(t.quantity * t.unit_price)) desc
+SELECT TOP 10 i.name                         AS instrument, 
+       SUM(t.quantity * t.unit_price)        AS exposure 
+FROM   trade t, 
+       position p, 
+       instrument i 
+WHERE  t.instrument_id = p.instrument_id 
+AND    t.portfolio_a = p.book_id
+AND    p.instrument_id = i.id 
+GROUP  BY ( i.name ) 
+ORDER  BY ABS(SUM(t.quantity * t.unit_price)) DESC 
 ```
 
 ## Query those tables to find the trader with the highest aggregate exposure among their top five securities.
 TODO
 ```
 ```
+
 
 # Using embedded H2 database inside browser to run above sql
    * Run [SpringBootH2Application](src/main/java/com/stehnik/tradebook/SpringBootH2Application.java) 

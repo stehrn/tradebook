@@ -53,13 +53,11 @@ INSERT INTO book (book_type, denominated, display_name, trader, entity) VALUES
   ('Profit Centre', 'EUR', 'ATEMP03', 'Jenny Osmond', 'PSEU'),
   ('Client Book', 'GBP', 'Client A', null, 'JAAM');
 
-
 INSERT INTO instrument (name) VALUES
   ('XS0104440986'),
   ('XS0124569566'),
   ('XS0629974352'),
   ('XS0629974888');
-
 
 INSERT INTO trade (portfolio_a, portfolio_b, instrument_id, trade_type, quantity, payment_unit, unit_price) VALUES
   (1, 4, 3, 'B', 10, 'GBP', 100.123),
@@ -75,7 +73,7 @@ INSERT INTO trade (portfolio_a, portfolio_b, instrument_id, trade_type, quantity
 
 INSERT INTO position (book_id, instrument_id, denominated) VALUES
   (1, 1, 'GBP'),
-  (1, 3, 'GBP'),
   (1, 2, 'GBP'),
+  (1, 3, 'GBP'),
   (1, 4, 'GBP'),
   (2, 4, 'GBP');
