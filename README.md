@@ -133,7 +133,7 @@ TODO
 ```
 
 # Using embedded H2 database inside browser to run above sql
-   * Run SpringBootH2Application, 
+   * Run [SpringBootH2Application](src/main/java/com/stehnik/tradebook/SpringBootH2Application.java) 
    * Go to http://localhost:8080/h2-console (check _JDBC URL_ is `jdbc:h2:mem:mydb`)
 
 #  Links to some of references used
