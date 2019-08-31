@@ -132,10 +132,28 @@ ORDER  BY ABS(SUM(t.quantity * t.unit_price)) DESC
 ```
 
 ## Query those tables to find the trader with the highest aggregate exposure among their top five securities.
-TODO
+Wow, this is a trickier query, ROW_NUMBER and PARTITION are the key to the solution. 
 ```
+SELECT TOP 1 b.trader, 
+       SUM(aggregate.exposure) AS exposure 
+FROM   (SELECT portfolio_a                                   AS trader, 
+               instrument_id, 
+               SUM(quantity * unit_price)                    AS exposure, 
+               ROW_NUMBER() 
+                 OVER( 
+                   PARTITION BY portfolio_a 
+                   ORDER BY SUM(quantity * unit_price) DESC) AS rank 
+        FROM   trade 
+        GROUP  BY portfolio_a, 
+                  instrument_id 
+        ORDER  BY trader, 
+                  rank) aggregate, 
+       book b 
+WHERE  aggregate.rank <= 5 
+AND    b.id = aggregate.trader 
+GROUP  BY aggregate.trader 
+ORDER  BY exposure DESC 
 ```
-
 
 # Using embedded H2 database inside browser to run above sql
    * Run [SpringBootH2Application](src/main/java/com/stehnik/tradebook/SpringBootH2Application.java) 
