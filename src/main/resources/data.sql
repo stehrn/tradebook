@@ -6,7 +6,7 @@ CREATE TABLE book (
   id INT AUTO_INCREMENT  PRIMARY KEY,
   book_type VARCHAR(20) NOT NULL,
   denominated CHAR(3) NOT NULL,
-  display_name VARCHAR(100) NOT NULL,
+  display_name VARCHAR(50) NOT NULL,
   trader VARCHAR(50) NULL,
   entity CHAR(4) NOT NULL
 );
@@ -31,7 +31,7 @@ CREATE TABLE trade (
   unit_price DECIMAL(10,5),
   FOREIGN KEY (portfolio_a) REFERENCES book(id),
   FOREIGN KEY (portfolio_b) REFERENCES book(id),
-  FOREIGN KEY (instrument_id) REFERENCES instrument(id),
+  FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
 
 DROP TABLE IF EXISTS position;

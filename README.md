@@ -159,5 +159,20 @@ ORDER  BY exposure DESC
    * Run [SpringBootH2Application](src/main/java/com/stehnik/tradebook/SpringBootH2Application.java) 
    * Go to http://localhost:8080/h2-console (check _JDBC URL_ is `jdbc:h2:mem:mydb`)
 
+# Adding a Java ORM layer
+Quick spike to use [jooq](https://www.jooq.org) to generate Java objects from sql schema defined in [data.sql](src/main/resources/data.sql). 
+[pom](pom.xml) contains maven profile to generate, run:
+```
+mvn generate-sources -P jooq
+```
+When [SpringBootH2Application](src/main/java/com/stehnik/tradebook/SpringBootH2Application.java)
+ is running get list of positions from http://localhost:8080/listPositions
+
+(see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java))
+
+I'm not overly keen on jooq, tried using API to replicate some of above sql and its heavy going. As an exercise worth looking into how this could be done a bit more easily/what other frameworks are out there (hibernate still any good?) 
+
 #  Links to some of references used
    * https://www.baeldung.com/spring-boot-h2-database
+   * https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-sql.html#boot-features-jooq
+

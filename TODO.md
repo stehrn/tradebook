@@ -4,5 +4,6 @@
    * Add book.book_type 'Profit Centre' to query to only include firm side
    * Apply FX conversion when working out exposure
    * Review data types again, sizes etc
+   * sql tests?
    
      

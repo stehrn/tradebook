@@ -15,6 +15,7 @@
 
     <properties>
         <java.version>1.8</java.version>
+        <jooq.version>3.11.11</jooq.version>
     </properties>
 
     <dependencies>
@@ -26,12 +27,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-devtools</artifactId>
             <scope>runtime</scope>
             <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.jooq</groupId>
+            <artifactId>jooq</artifactId>
+            <version>${jooq.version}</version>
         </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
@@ -53,6 +58,69 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>jooq</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jooq</groupId>
+                        <artifactId>jooq-codegen-maven</artifactId>
+                        <version>3.11.11</version>
+                        <executions>
+                            <execution>
+                                <id>generate-jooq-sources</id>
+                                <phase>generate-sources</phase>
+                                <goals>
+                                    <goal>generate</goal>
+                                </goals>
+                                <configuration>
+                                    <generator>
+                                        <generate>
+                                            <pojos>true</pojos>
+                                            <daos>true</daos>
+                                            <pojosEqualsAndHashCode>true</pojosEqualsAndHashCode>
+                                            <javaTimeTypes>true</javaTimeTypes>
+                                        </generate>
+                                        <database>
+                                            <name>org.jooq.meta.extensions.ddl.DDLDatabase</name>
+                                            <inputCatalog></inputCatalog>
+                                            <inputSchema>PUBLIC</inputSchema>
+                                            <outputSchemaToDefault>true</outputSchemaToDefault>
+                                            <outputCatalogToDefault>true</outputCatalogToDefault>
+                                            <properties>
+                                                <property>
+                                                    <key>sort</key>
+                                                    <value>semantic</value>
+                                                </property>
+                                                <property>
+                                                    <key>scripts</key>
+                                                    <value>src/main/resources/data.sql</value>
+                                                </property>
+                                            </properties>
+                                        </database>
+                                        <target>
+                                            <clean>false</clean>
+                                            <packageName>com.stehnik.tradebook.model</packageName>
+                                            <directory>src/main/java</directory>
+                                        </target>
+                                    </generator>
+                                </configuration>
+                            </execution>
+                        </executions>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.jooq</groupId>
+                                <artifactId>jooq-meta-extensions</artifactId>
+                                <version>${jooq.version}</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>
 
