@@ -1,6 +1,5 @@
 # Overview
-Design some tables to model a small trading desk. There are a few traders who each have a book, they maintain positions on a number of 
-securities, and execute trades against those positions. 
+Design some tables to model a small trading desk. There are a few traders who each have a book, they maintain positions on a number of securities, and execute trades against those positions. 
 
 # Some terminology
 A review of trading terminology to help with understanding schemas, and some pseudo code to help understand relationships and cardinality
@@ -18,13 +17,13 @@ A review of trading terminology to help with understanding schemas, and some pse
 
 ### Book - a collection of positions
    * Trade always executed between two parties. Books represent both of those parties/accounts
-   * Can have trading risk account books linked to a traders profit centre and customer books
+   * Can have trading risk account books linked to a traders profit centre, customer and sales books
    * Things of interest:
       * Book type - profit centre, customer, sales (both of previous)
-      * Positions
+      * Positions - all positions for which `book(position) == book`
       * Children - tradables taken from those positions (non-zero positions)
       * Leaves: recursive tradables for each child
-      * Price: [sum] for each leaf {price(leaf) * leaf quantity}
+      * Price: `[sum] for each leaf: (price(leaf) * leaf quantity)`
 
 Example book:
 ```
@@ -39,24 +38,50 @@ Book {
   ...
 }
 ```
-Example operations:
+Similar for sales and client books.
+
+Example operations on a book:
+
+Get the leaves (tradables)
 ```
 Leaves("ATEMK01") 
 ---
 Instrument A: 0.000654
 Instrument B: -0.00456
-
+...
+```
+Position information
+```
 Size(Positions("ATEMK01"))
 ---
 798
-
+```
+Price:
+```
 Price("ATEMK01")
 ---
 -0.003906
 ```
 
-### Security - financial instrument 
-   * Trade is on one security
+### Group
+* A group is a business or desk
+* Book has one group
+* Traders can trade to one or more groups, with user entitlements to tades and positions derived from groups
+* Notable properties:
+   * Children: profit centres for the group
+   * Group portfolio - used by traders to aggregate risk
+   * strat/technology owner
+   * trade db, holiday calendar etc
+
+### Security (aka tradable) - financial instrument 
+   * Trade is on one security (moved it form one book to another)
+   * An idealised tradeable: 
+      * can price itself
+      * defines support trade types (buy/sell, expire etc)
+      * is immutable
+      * has blessed (and passing) price and trade tests to allow trading
+
+XXX
 
 ### Position - what happens when trade is booked
    * Position = total holding of a tradable in a book
