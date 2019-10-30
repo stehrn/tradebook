@@ -81,7 +81,18 @@ Price("ATEMK01")
       * is immutable
       * has blessed (and passing) price and trade tests to allow trading
 
-XXX
+Example option trade:
+```
+Option Style: European
+Option type: Call on EUR
+Delivery: Cash
+Cash Settlement CCY: EUR
+Quantity: 1
+Expires: 19Dec2019
+Settles: 1Nov2019
+Strike:
+Spot:
+```
 
 ### Position - what happens when trade is booked
    * Position = total holding of a tradable in a book
@@ -91,6 +102,7 @@ XXX
       * Book name
       * Qty unit == security
       * Qty
+      * Next transaction date, expiration date (derived off security)
       * Price = Price (Qty unit) * Qty
       * Trade id's: list of contributing trades and associated qty
 
@@ -100,19 +112,45 @@ XXX
    * Double entry book keeping - position effects across both books sum to zero
 
 ```
-Trade Info {
+Trade Info = {
   Portfolio1: "ATEMK01",
   Portfolio2: "Client A",
   Trader: "Nik Stehr",
-  Trade Type: "Sell",
+  Trade Type: "Buy",
   // tradeable info
-  Expiration Date: "18Dec2019"
-  Quantity: 10
+  Expiration Date: "19Dec2019"
+  Quantity: 1
   Quantity Unit: "XS0104440986"
-  Payment Unit: "USD"
+  Payment Unit: "EUR"
   Unit Price: 2.3292
 }
+
+Transaction("t1")
+   ErrorCheck( Trade = TradeAPI:Add(Trade Info))
 ```
+
+# Position Increments
+
+Book: Client A
+Qty: -200.00
+Security: XS0104440986
+TradeId: T1
+
+Book: Sales 123
+Qty: 200.00
+Security: XS0104440986
+TradeId: T1
+
+Book: Trader ATEMK01
+Qty: 200.00
+Security: XS0104440986
+TradeId: T2
+
+Book: Sales ATEMK01
+Qty: -200.00
+Security: XS0104440986
+TradeId: T2
+
 
 # Schema 
 see [data.sql](src/main/resources/data.sql)
