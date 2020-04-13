@@ -96,10 +96,8 @@ Trade Details {
   Portfolio2: "Third Rock Investments",
   Trader: "Sammy Bruce",
   Trade Type: "Sell",
-  // tradeable info
   Quantity: 10
   Quantity Unit: "TSLA"
-  Payment Unit: "USD"
   Unit Price: 540.10
   ...
 }

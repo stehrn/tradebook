@@ -24,11 +24,12 @@ CREATE TABLE trade (
   id INT AUTO_INCREMENT  PRIMARY KEY,
   portfolio_a INT NOT NULL,
   portfolio_b INT NOT NULL,
-  instrument_id  INT NOT NULL,
+  trader VARCHAR(50),
   trade_type CHAR(1) NOT NULL,
   quantity INT NOT NULL,
-  payment_unit CHAR(3) NOT NULL,
+  instrument_id INT NOT NULL,
   unit_price DECIMAL(10,5),
+  unit_ccy CHAR(3) NOT NULL,
   FOREIGN KEY (portfolio_a) REFERENCES book(id),
   FOREIGN KEY (portfolio_b) REFERENCES book(id),
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
@@ -40,7 +41,7 @@ CREATE TABLE position (
   id INT AUTO_INCREMENT  PRIMARY KEY,
   book_id INT NOT NULL,
   instrument_id  INT NOT NULL,
-  denominated CHAR(3) NOT NULL,
+  quantity INT NOT NULL,
   FOREIGN KEY (book_id) REFERENCES book(id),
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
@@ -51,29 +52,39 @@ INSERT INTO book (book_type, denominated, display_name, trader, entity) VALUES
   ('Profit Centre', 'GBP', 'ATEMK01', 'Nik Stehr', 'PSUS'),
   ('Profit Centre', 'GBP', 'ATFMK02', 'Mark Rogerson', 'PSEU'),
   ('Profit Centre', 'EUR', 'ATEMP03', 'Jenny Osmond', 'PSEU'),
-  ('Client Book', 'GBP', 'Client A', null, 'JAAM');
+  ('Client Book', 'GBP', 'Client A', null, 'JAAM'),
+  ('Profit Centre', 'GBP', 'MKEIT01', 'Sammy Bruce', 'EUCE'),
+  ('Client Book', 'GBP', 'Third Rock Investments', null, 'EUCE');
 
 INSERT INTO instrument (name) VALUES
   ('XS0104440986'),
   ('XS0124569566'),
   ('XS0629974352'),
-  ('XS0629974888');
+  ('XS0629974888'),
+  ('TSLA');
 
-INSERT INTO trade (portfolio_a, portfolio_b, instrument_id, trade_type, quantity, payment_unit, unit_price) VALUES
-  (1, 4, 3, 'B', 10, 'GBP', 100.123),
-  (1, 4, 3, 'S', -5, 'GBP', 100.155),
-  (1, 4, 3, 'B', 2, 'GBP', 100.130),
-  (1, 4, 1, 'B', 50, 'GBP', 145.121),
-  (1, 4, 1, 'S', -50, 'GBP', 149.900),
-  (1, 4, 2, 'B', 50, 'GBP', 32.452),
-  (1, 4, 2, 'S', -62, 'GBP', 32.467),
-  (1, 4, 4, 'B', 1, 'GBP', 1003.1234),
-  (1, 4, 4, 'B', 1, 'GBP', 1003.1235),
-  (2, 4, 4, 'B', 8, 'GBP', 1003.10213);
+INSERT INTO trade (portfolio_a, portfolio_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
+  (1, 4, '', 'B', 10, 3, 100.123, 'GBP'),
+  (1, 4, '', 'S', 5, 3, 100.155, 'GBP'),
+  (1, 4, '', 'B', 2, 3, 100.130, 'GBP'),
+  (1, 4, '', 'B', 50, 1, 145.121, 'GBP'),
+  (1, 4, '', 'S', 50, 1, 149.900, 'GBP'),
+  (1, 4, '', 'B', 80, 2, 32.452, 'GBP'),
+  (1, 4, '', 'S', 20, 2, 32.467, 'GBP'),
+  (1, 4, '', 'B', 10, 4, 1003.1234, 'GBP'),
+  (1, 4, '', 'B', 10, 4, 1003.1235, 'GBP'),
+  (2, 4, '', 'B', 80, 4, 1003.10213, 'GBP');
 
-INSERT INTO position (book_id, instrument_id, denominated) VALUES
-  (1, 1, 'GBP'),
-  (1, 2, 'GBP'),
-  (1, 3, 'GBP'),
-  (1, 4, 'GBP'),
-  (2, 4, 'GBP');
+INSERT INTO position (book_id, instrument_id, quantity) VALUES
+(1, 3, 7),
+(4, 3, -7),
+(1, 1, 0),
+(4, 1, 0),
+(1, 2, 60),
+(4, 2, -60),
+(1, 4, 20),
+(4, 4, -20),
+(2, 4, 80),
+(4, 4, -80),
+(5, 5, 0),
+(6, 5, 0);

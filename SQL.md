@@ -1,5 +1,5 @@
 # Overview 
-This article will look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is also presented, and we finish with a quick look at alternatives to hand crafted sql through the use of Object Relational Mapping (ORM)     
+This article will look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is presented, and we finish with a quick look at alternatives to hand crafted sql through the use of Object Relational Mapping (ORM) .    
 
 # Domain Model
 From the previous article, we defined three key parts to the domain:
@@ -13,7 +13,7 @@ We should add to that an _Instrument_ which is the thing been traded (e.g. stock
 # Schema 
 Lets define the minimal schema to demonstrate what happens when a trade is booked.
 
-The book table will have a type (e.g. profit centre, customer), denominated currency, name of trader (can be null, e.g. if its a customer book), and legal entity. Once set up, this data wont generally change that often.
+The `book` table will have a type (e.g. profit centre, customer), denominated currency, name of trader (likely the desk head in charge, can be null if its a customer book), and legal entity - a distinct ring-fenced part of the business (e.g. US versus EMEA). Once set up, this data wont generally change that often.
 ```sql
 CREATE TABLE book (
   id INT AUTO_INCREMENT  PRIMARY KEY,
@@ -26,7 +26,7 @@ CREATE TABLE book (
 );
 ```
 
-An instrument is the thing been traded, it has a name and type (the type is important, as will be used to derive the pricing model), plus a bunch of attributes that will be used for pricing purposes. There will also be industry standard identifiers for the security (e.g. ISIN, SEDOL)
+An `instrument` is the thing been traded, it has a name, type plus a bunch of attributes that will be used for pricing purposes; there will also be industry standard identifiers for the security (e.g. ISIN, SEDOL)
 ```sql
 CREATE TABLE instrument (
   id INT AUTO_INCREMENT  PRIMARY KEY,
@@ -36,40 +36,186 @@ CREATE TABLE instrument (
 );
 ```
 
-The trade table is where most of the action takes place, it has to record the instrument been traded, whether buy/sell, quantity (e.g. number of shares), currency, and unit price (price of instrument at point of trade) 
+The `trade` table records the two parties involved in the trade (via a reference to a book) and the trader themselves, the direction of the trade - whether it was a buy (`B`) or sell (`S`), the quantity traded, and the details on the instrument including its price and base currency. 
+
 ```sql
 CREATE TABLE trade (
   id INT AUTO_INCREMENT  PRIMARY KEY,
   portfolio_a INT NOT NULL,
   portfolio_b INT NOT NULL,
-  instrument_id  INT NOT NULL,
-  trade_type CHAR(1) NOT NULL,
+  trader VARCHAR(100) NOT NULL,
+  trade_type CHAR(1) NOT NULL,  
   quantity INT NOT NULL,
-  payment_unit CHAR(3) NOT NULL,
+  instrument_id  INT NOT NULL,
   unit_price DECIMAL(10,5),
+  unit_ccy CHAR(3) NOT NULL,
   FOREIGN KEY (portfolio_a) REFERENCES book(id),
   FOREIGN KEY (portfolio_b) REFERENCES book(id),
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
 ```
+(other possible names for this table - `order` or `transaction`?)
 
-The position table maintains a relationship between a book and an instrument
+The position table holds the _total_ holdings of an instrument in a book at a particular point in time. It could be tempting to use the trade table to derive the same aggregate view of the open position quantity, in practice its a bit more efficient to store position separately and avoid the trade table queries (even with well thought out indexes). Bear in mind this introduces the risk the trade and position tables don't match if an edit is done in one table but not the other. It should, however, always be possible to regenerate the position table from the trade table.      
 ```sql
 CREATE TABLE position (
   id INT AUTO_INCREMENT PRIMARY KEY,
   book_id INT NOT NULL,
   instrument_id  INT NOT NULL,
-  denominated CHAR(3) NOT NULL,
+  quantity INT NOT NULL,
   FOREIGN KEY (book_id) REFERENCES book(id),
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
 ```
 
+This in the final schema and relationships:
+
+![Database Schema](img/schema.png)
+
+(created using [dbdiagram.io](http://dbdiagram.io))
+ 
+# What happens when a trade is booked?
+
+Lets continue the example from the first article where we had this trade:
+```
+Trade Details {
+  Portfolio1: "MKEIT01", 
+  Portfolio2: "Third Rock Investments",
+  Trader: "Sammy Bruce",
+  Trade Type: "Sell",
+  Quantity: 10
+  Quantity Unit: "TSLA"
+  Unit Price: 540.10
+  Unit Currency: "USD"
+  ...
+}
+```
+Lets assume ops have set up our books and the product team have set up the TSLA security (our entity is made up, the denomination is USD so it would probably be a US business line)
+
+`select * from book where entity = 'GRUS';`
+
+|ID |BOOK_TYPE  	|DENOMINATED  	|DISPLAY_NAME  	        |TRADER  	 |ENTITY  |
+|---|---------------|---------------|-----------------------|------------|--------|
+|5	|Profit Centre	|USD	        |MKEIT01	            |Sammy Bruce |EUCE    |
+|6	|Client Book	|USD	        |Third Rock Investments	|null	     |EUCE    |
+
+`select * from instrument where NAME = 'TSLA'`
+
+|ID|NAME|
+|---|---|
+|5|TSLA|  
+ (yes, light on detail)
+
+From this trade we'd expect one new row in the `trade` table as per the above trade details with an insert to capture:
+```
+Portfolio1: "MKEIT01", 
+Portfolio2: "Third Rock Investments",
+Trader: "Sammy Bruce",
+Trade Type: "Sell",
+Quantity: 10
+Quantity Unit: "TSLA"
+Unit Price: 540.10
+Unit Currency: "USD"
+``` 
+sql (portfolio id's are from the book table):
+```sql
+INSERT INTO trade (portfolio_a, portfolio_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
+  (5, 6, 'Sammy Bruce', 'B', 10, 5, 540.10, 'USD')
+``` 
+
+A trade modifies positions in two books, one book goes up by the quantity bought/sold, the other down by the same amount - the net effect across both books should always be zero. We' expect the following increments (decrements) on the `position` table for our trade: 
+```
+Book Name: MKEIT01
+Quantity: -10
+Instrument: TSLA
+```
+```
+Book Name: Third Rock Investments
+Quantity: 10
+Instrument: TSLA
+```  
+  
+sql: 
+```sql
+update position 
+set quantity      = quantity - 10 
+where book_id     = 5 // risk book 
+and instrument_id = 5 // TSLA
+```
+```sql
+update position 
+set quantity      = quantity + 10 
+where book_id     = 6 // client book 
+and instrument_id = 5 // TSLA
+```
+What just happened? Running the above query blew away what our position was previously, we can no longer go back in time, which is a big problem given the many use cases in a trading and risk system that require data as-of a given business date. How do we fix this? The next section explains ...   
+
+## A note on dates
+You'll notice for simplicity none of the tables contain dates - in reality, they will, and its worth commenting on _bi-temporal chaining_ whereby all changes to a database are tracked along two dimensions:
+* Business Time - when the change actually occurred in the world
+* Processing Time - when the change actually was recorded in the database
+
+This is a common requirement for end-of-day reporting and useful for support analysis.
+
+Its implemented through the addition of four columns:
+
+* `FROM_Z` and `THRU_Z` to track the validity of the row along the business-time dimension
+*  `IN_Z` and`OUT_Z` to track the validity of the row along the processing-time dimension
+
+Coming back to the position example, lets look at how to increment position by 10 on client book - assume we start with a position of 100 for given book/instrument:  
+
+|BOOK_ID  |INSTRUMENT_ID  |QUANTITY   |FROM_Z|THRU_Z  |IN_Z  |OUT_Z   |
+|--------|------|--------|------|--------|------|--------|
+|6|5|100|Apr 20|Infinity|Apr 20|Infinity|
+
+`IN_Z` is Apr 20 which tells us trade executed on this date, `OUT_Z` Infinity which tells us this row is latest state of the position 
+
+First invalidate (aka chain out) the old row by setting `OUT_Z` to the current business date (pretend today is Apr 23): 
+
+|BOOK_ID  |INSTRUMENT_ID  |QUANTITY   |FROM_Z|THRU_Z  |IN_Z  |OUT_Z   |
+|--------|------|--------|------|--------|------|--------|
+|6|5|100|Apr 20|Infinity|Apr 20|Apr 23|
+
+
+Next insert a new row with previous position + 10, 
+
+|BOOK_ID  |INSTRUMENT_ID  |QUANTITY   |FROM_Z|THRU_Z  |IN_Z  |OUT_Z   |
+|--------|------|--------|------|--------|------|--------|
+|6|5|110|Apr 23|Infinity|Apr 23|Infinity|
+
+These table entries tell us:
+* From Apr 20 to Apr 23, position = 100 
+* From Apr 23 to Infinity, position = 110 (previous position + 10)
+ 
+To get the _current_ position (i.e `OUT_Z=Infinity`) as-of current business date: 
+```sql
+select * from position 
+where book_id = 6
+and instrument_id = 5 
+and FROM_Z <= '2020-04-23 00:00:00.000' 
+and THRU_Z > '2020-04-23 00:00:00.000' 
+and OUT_Z = '9999-12-01 23:59:00.000'
+```
+To get position as-of a point in the past, lets say before the increment came in (Apr 21): 
+```sql
+select * from position 
+where book_id = 6
+and instrument_id = 5 
+and FROM_Z <= '2020-04-21 00:00:00.000' 
+and THRU_Z > '2020-04-21 00:00:00.000'
+and IN_Z <= '2020-04-21 00:00:00.000' 
+and OUT_Z > '2020-04-21 00:00:00.000'
+```
+
+Check out this very good [goldmansachs](https://goldmansachs.github.io/reladomo-kata/reladomo-tour-docs/tour-guide.html#N408B5) tutorial for more details (including how `THRU_Z` is used to capture same business day changes).   
+
 # Sample queries
 In all cases portfolio_a is trader book and portfolio_b is client book
 
+TODO; put in some for above.
+
 ## Find the current position of the firm 
-How long and short it is on each of the securities it trades. This is a join across all three tables, filtering out zero positions 
+How long and short it is on each of the securities it trades. The position table makes this simple, just need to decide whether to filter out zero positions 
 ```
 SELECT i.name          AS instrument, 
        SUM(t.quantity) AS position 
@@ -128,19 +274,6 @@ AND    b.id = aggregate.trader
 GROUP  BY aggregate.trader 
 ORDER  BY exposure DESC 
 ```
-## A note on dates
-You'll notice for simplicity none of the tables contain dates - in reality, they will, and its worth commenting on _bi-temporal chaining_ whereby all changes to a database are tracked along two dimensions:
-* Business Time - when the change actually occurred in the world
-* Processing Time - when the change actually was recorded in the database
-
-This is a common requirement for end-of-day reporting and useful for support analysis.
-
-Its implemented through the addition of four columns:
-
-* `FROM_Z` and `THRU_Z` to track the validity of the row along the business-time dimension
-*  `IN_Z` and`OUT_Z` to track the validity of the row along the processing-time dimension
-
-Check out this very good [goldmansachs](https://goldmansachs.github.io/reladomo-kata/reladomo-tour-docs/tour-guide.html#N408B5) tutorial for more details.   
 
 # Using embedded H2 database inside browser to run sql queries
 A simple [Spring Boot](https://spring.io/projects/spring-boot) app using an embedded in memory [H2 database](https://www.h2database.com/html/main.html) has been created to test the schema and queries (based on this great [baeldung tutorial](https://www.baeldung.com/spring-boot-h2-database))
@@ -206,4 +339,5 @@ List<Position> positions = positionDao.findAll();
 ```
 (see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java))
 
-
+# Recap
+TODO 
