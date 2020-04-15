@@ -99,6 +99,7 @@ Lets assume ops have set up our books and the product team have set up the TSLA 
 |---|---------------|---------------|-----------------------|------------|--------|
 |5	|Profit Centre	|USD	        |US Eq Flow	            |Sammy Bruce |USTRD   |
 |6	|Client Book	|USD	        |Third Rock Investments	|null	     |USTRD   |
+
 (make a mental note of IDs here as used in upcoming sql)
 
 `select * from instrument where NAME = 'TSLA'`
@@ -106,6 +107,7 @@ Lets assume ops have set up our books and the product team have set up the TSLA 
 |ID|NAME|
 |---|---|
 |8|TSLA|  
+
  (yes, light on detail, this is all we need for the example)
 
 From this trade we'd expect one new row to be inserted into the `trade` table as per the above trade details
