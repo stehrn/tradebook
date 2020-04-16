@@ -52,7 +52,7 @@ INSERT INTO book (book_type, denominated, display_name, trader, entity) VALUES
   ('Profit Centre', 'USD', 'ATEMK01', 'Nik Stehr', 'PSUS'),
   ('Profit Centre', 'USD', 'ATFMK02', 'Mark Rogerson', 'PSEU'),
   ('Profit Centre', 'EUR', 'ATEMP03', 'Jenny Osmond', 'PSEU'),
-  ('Client Book', 'USD', 'Client A', null, 'JAAM'),
+  ('Client Book', 'USD', 'Blue Sky', null, 'JAAM'),
   ('Profit Centre', 'USD', 'US Eq Flow', 'Sammy Bruce', 'EUCE'),
   ('Client Book', 'USD', 'Third Rock Investments', null, 'EUCE');
 
@@ -67,12 +67,13 @@ INSERT INTO instrument (name) VALUES
   ('TSLA');
 
 INSERT INTO trade (portfolio_a, portfolio_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
-  (1, 4, '', 'B', 10, 3, 100.123, 'GBP'),
-  (1, 4, '', 'S', -5, 3, 100.155, 'GBP'),
-  (1, 4, '', 'B', 2, 3, 100.130, 'GBP'),
+  (1, 4, '', 'B', 10, 3, 100.123, 'USD'),
+  (1, 4, '', 'S', -5, 3, 100.155, 'USD'),
+  (1, 4, '', 'B', 2, 3, 100.130, 'USD'),
   (5, 6, 'Sammy Bruce', 'B', 100, 8, 540.00, 'USD'),
   (5, 6, 'Sammy Bruce', 'S', -50, 8, 540.15, 'USD'),
   (5, 6, 'Sammy Bruce', 'B', 50, 8, 540.09, 'USD'),
+  (5, 4, 'Sammy Bruce', 'B', 200, 8, 530.00, 'USD'),
   (1, 4, '', 'B', 50, 1, 145.121, 'USD'),
   (1, 4, '', 'S', -50, 1, 149.900, 'USD'),
   (1, 4, '', 'B', 80, 2, 32.452, 'USD'),
@@ -82,8 +83,9 @@ INSERT INTO trade (portfolio_a, portfolio_b, trader, trade_type, quantity, instr
   (2, 4, '', 'B', 80, 4, 1003.10213, 'USD');
 
 INSERT INTO position (book_id, instrument_id, quantity) VALUES
-(5, 8, 100),
+(5, 8, 300),
 (6, 8, -50),
+(4, 8, -200),
 (1, 3, 7),
 (4, 3, -7),
 (1, 1, 0),

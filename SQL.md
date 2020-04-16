@@ -344,6 +344,20 @@ List<Position> positions = positionDao.findAll();
 ```
 (see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java))
 
+A slightly more complex example returns all the trades for a given position, e.g. to show trades for 'US Eq Flow' risk book and 'TSLA' security:
+ 
+`http://localhost:8080/tradesForPosition?book=US%20Eq%20Flow&security=TSLA`
+
+The presentation is not pretty but you'll see (trade quantity, trade ID, counterparty/customer book):
+```java
+[
+  [100,4,"Third Rock Investments"],
+  [-50,5,"Third Rock Investments"],
+  [50,6,"Third Rock Investments"],
+  [200,7,"Blue Sky"]
+]
+```
+ 
 # Recap
 We've covered the domain model and sql schema for a simple trade application. If we wanted to extend this to pricing then more data would be required (an idea for a future article?). Some important factors such as fx conversion of monetary amounts and bi-temporal chaining to maintain trade history have also been discussed.  
 
