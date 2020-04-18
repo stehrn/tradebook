@@ -3,7 +3,7 @@
 ## Overview
 We're going to look at some trading desk concepts, we'll cover: what is a trade and how can it be modelled; what you need before booking a trade; and what happens when a trade is booked. 
  
-A simple trade API will be defined as we work through the concepts covering trade booking and the basics of pricing, in the final sectionsome of the challenges of building out risk systems will be discussed.       
+A simple trade API will be defined as we work through the concepts covering trade booking and the basics of pricing, in the final section some of the challenges of building out risk systems will be discussed.       
 
 ## What is a trade?
    * A contract to buy or sell something
@@ -184,43 +184,55 @@ price(jam) = price(strawberries) + price(sugar)
            = $1.02 + $0.20
            = $1.22
 ```
+If sugar went up by 2 cents the price of jam would go up to $1.24. 
+
 There are other factors, and the more we can model the more accurate the price will be. If some factors are missed off and they subsequently change in value, then this wont be reflected in the price, leading to inaccurate pnl and risk management/reporting.    
 
 #### A simple pricing API
-
+A pricing service provides top level API to price things: instruments, positions, and books. It requires a  _pricing context_ which contains the valuation date, information to help resolve dependencies and other parameters to control pricing. 
 ```
-pricingContext = ...
+context = ... 
 price = pricingService.price(instrument("TSLA"), pricingContext)
 ```
+What happens inside call to price `price`? There's a few collaborating _services_ and _data providers_: 
+* `modelService` - provide the model to price given instrument with, the model is used to derive the risk factors 
+* `dependencyService` - determine market data dependencies for given risk factor and resolve dependency using pricing context
+* `productDataProvider` & `marketDataProvider` - load product and market data for given set of resolved dependencies 
 
-`pricingModelService`
+Lets consider our cash equity instrument, the model could be some sort of Net Present Value (NPV) approach that looks at the current spot and future dividends and cashflows, discounting them back to derive the PV. So somewhere in the `modelService` the following instrument type to model mapping will be defined:
+```
+cash equity --> model (Equity Net Present Value)
+``` 
+(we've gone for simple 1-to-1 mapping, but it could be something more sophisticated like a rules based approach based on multiple attributes)
 
-`pricingService`
-`dependenciesService`
-`productDataProvider` & `marketDataProvider`
+What sort of risk factors would be derived from this model? They would include: spot; future cashflows (dividends/non dividend); yield curve (to discount cashflows). 
+
+What might we expect the `dependencyService` resolved market data dependencies to look like? Remember we said they'd be like a URI? A good guess would be the following strings (assume valuaton date is 21-04-2020):
 
 ```
-/instrument/TSLA/
-/spot/TSLA/
-/dividends/TSLA/
-/curve/USD/
+/instrument/TSLA/21-04-2020
+/spot/TSLA/21-04-2020
+/dividends/TSLA/21-04-2020
+/cashflows/TSLA/21-04-2020
+/curve/USD/21-04-2020
 ```  
+These 'co-ordinates' are then passed to the `productDataProvider` & `marketDataProvider` to load data in some shape or form - it could be json, xml, or something else, but will be based on how its stored in the data provider and not necessarily what is required for pricing. 
 
+The product and market data will need transforming into a representation understood by the `pricingService` - it may, for example, have its own object model that needs hydrating. 
 
-What happens inside `price`:
+Finally the transformed data will be passed to the `pricingService` to perform the actual pricing, where some sort of mathematical computations as defined in the pricing model will be applied to the data to derive the price.    
+  
+
+Putting it all together `pricingService.price(instrument)` will look something like this:
 ```
-// a pricing context is supplied, it contains a valuation date and information to help resolve dependencies
-context = ... 
-
 // get the pricing model for given instrument type 
-model = pricingModelService.getModel(instrument.type)
+model = modelService.getModel(instrument.type)
 
-// for each risk factor defined in the model derive the market data 
-// dependencies and resolve for given instrument/context 
+// for each risk factor defined in the model derive the market data dependencies and resolve for given context/instrument 
 resolvedDependencies = [] // a collection of URIs
 for riskFactor in model.riskFactors:
-   for marketDataDependency in dependenciesService.getMarketDataDependencies(riskFactor): 
-      resolvedDependencies += dependenciesService.resolvedDependency(context, marketDataDependency)
+   for marketDataDependency in dependencyService.getMarketDataDependencies(riskFactor): 
+      resolvedDependencies += marketDataDependency.resolved(context, instrument)
 
 // load market data 
 marketData = marketDataProvider.load(resolvedDependencies)
@@ -232,9 +244,14 @@ productData = productDataProvider.load(instrument)
 pricingData = transform(productData, marketData)
 
 // price 
-price = pricingService.price(model, pricingData)
+price = pricingService.price(context, model, pricingData)
 ```
-  
+What about pricing a position? 
+```
+price = price(position.instrument) * position.qty
+```
+Both pricing a position and a book just need to call into this instrument level price code, with scaling applied with the position quantity.  
+
 ### Other considerations when designing a trade API
 Key things are to have a _clear domain_, _functional segregation_, _business logic barriers_, and excessive _automated regression testing_.
 
@@ -271,8 +288,11 @@ Given risk systems are part of a complex graph of upstream and downstream system
 #### Pricing optimisation
 How to avoid things like reloading same market, or re-pricing for same underlying. Having a clearly defined calculation unit, say, a book, is a a good starting point, as this can be scanned for optimisations e.g. pull out unique set of product and market data and batch load/transform. Optimisations can also exist at the pricing model level, requiring more complex logic in how pricing requests are generated.        
     
-      
-### Thanks for reading 
-That's all for now, thanks for reading, please do leave comments, and in the next article we'll progress onto a simple (sql) data model to help explain the concepts introduced here. 
+### Recap 
+Alright, we made it to the end, we've covered what happens when a trade is booked, some of the key concepts like a _book_, _position_, _trade_, and _instrument_; how to price an instrument with some pseudo code for a simple pricing service, and discussed some of the other challenging building out these types of system.   
+
+In the next article we'll look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is presented, followed by a look at Object Relational Mapping (ORM).    
+
+Thanks for reading and please do leave comments! 
  
                                                   

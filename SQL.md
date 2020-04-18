@@ -1,5 +1,5 @@
 # Overview 
-This article will look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is presented, and we finish with a quick look at alternatives to hand crafted sql through the use of Object Relational Mapping (ORM).    
+This article will look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is presented, followed by a look at alternatives to hand crafted sql through the use of Object Relational Mapping (ORM).    
 
 # Domain Model
 From the previous article, we defined three key parts to the domain:
