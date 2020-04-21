@@ -1,124 +1,105 @@
-# Trade Concepts
+# Risk System Concepts - Trade Booking & Pricing
 
 ## Overview
-We're going to look at some trading desk concepts, we'll cover: what is a trade and how can it be modelled; what you need before booking a trade; and what happens when a trade is booked. 
+This article will give you a flavour for how risk systems works, looking at trading desk concepts including: 
+* what is a trade and how can it be modelled 
+* what you need before booking a trade
+* what happens when a trade is booked 
  
-A simple trade API will be defined as we work through the concepts covering trade booking and the basics of pricing, in the final section some of the challenges of building out risk systems will be discussed.       
+A simple trade API is evolved, starting with trade booking and then pricing, examples and pseudo code are provided to help understand concepts, and some of the challenges of building out risk systems are discussed.       
 
 ## What is a trade?
+A trade is: 
    * A contract to buy or sell something
    * An action that changes positions
 
-There are lots of different types of trade, one of the simplest is cash equity - e.g. buying or selling stock in Tesla ([TSLA](https://finance.yahoo.com/quote/TSLA/)), and this is what we'll focus on.
+There are lots of different _types_ of trade, one of the simplest is _cash equity_ - e.g. buying or selling stock in Tesla ([TSLA.OQ](https://www.reuters.com/companies/TSLA.OQ)), and this is what we'll focus on.
+
+The thing been traded is the _security_, an alternative term is _instrument_, both can be used interchangeably. 
 
 ## Goal of accurate trade modelling
+_Trade modelling_ is a term that captures the process of what happens when a trade is booked, pricing and risk management, with the objectives of: 
    * Accurate positions
    * No unexplaned PnL
-   * Reproducable PnL reports
+   * Re-producable PnL reports
 
-Every trader needs to be able to _explain_ their PnL (_Profit and Loss_) - for example, did today's 5% increase in book value come from the price movement of existing positions or as a result of new trade activity (or both)?
+Every trader needs to be able to _explain_ their PnL (_Profit and Loss_) - for example, did today's 5% increase in portfolio value come from the price movement of existing positions or as a result of new trade activity (or both)?
 
 ## What do we need before booking a trade?
+   
+### Book 
+A trade is always executed between two parties - and a _book_ represent both of those parties/accounts, a book will have following attributes:
+ * Name and description
+ * Book type
+   * _trading book_ linked to a traders risk account/profit centre that generates revenues and PnL
+   * _customer book_ relate to the client. 
+   * _sales book_ is used if there's a sales desk helping with the origination of trading activity
+   *  _banking book_ used if securities are to be held long-term, even to maturity (FCA has a good definition [here](https://www.handbook.fca.org.uk/handbook/BIPRU/1/2.html))  
+ * Trader or desk head responsible for the book
+ * Company (legal entity) - a distinct ring-fenced part of the business often based on geography with different entities for US , EMEA and APAC but may be broken down further
+ * Denominated - currency to report in - likely to be that of country associated with legal entity.
 
-### _Book_ - a collection of positions
-   * Trade is always executed between two parties - books represent both of those parties/accounts
-   * There are different _types_ of book: _trading books_ are linked to a traders risk account/profit centre that generates revenues and PnL; _customer books_ relate to the client. There are also _sales books_, used if there's a sales desk helping with the origination of trading activity. 
-   * Things of interest:
-      * Book type - profit centre/customer/sales 
-      * Positions
-      * Instruments (shallow) - instruments taken from those positions (generally non-zero positions to filter out noise)
-      * Instruments (deep): recursive instruments for each (shallow) instrument - more complex trade structures will be composed of multiple instruments
-      * Price, current value of the book: `price = [sum] for each instrument {price(instrument) * instrument quantity}`
-
-(profit centre could also be associated with a _banking book_ if securities are to be held long-term, even to maturity, the FCA has a good definition [here](https://www.handbook.fca.org.uk/handbook/BIPRU/1/2.html)) 
-
+Another name for book could be _portfolio_
+ 
 Example book:
 ```
-Book {
-  Denominated: "USD",
-  Display Name: "US Eq Flow",
-  Book ID: "123456",
-  Book Type: "Profit Centre",
-  Description: "Cash Equity",
-  Trader: "Sammy Bruce",
-  Company: "PSCO" // aka legal entity
+{ "book": {
+    "id": ": "123456",
+    "displayName": "US Eq Flow",
+    "description": "Cash Equity",
+    "type": "Profit Centre",    
+    "trader": "Sammy Bruce",
+    "company": "PSCO", // aka legal entity
+    "denominated": "USD",
   ...
-}
+}}
 ```
-Example operations on a book:
+We'll come back to operations on a book after looking at some other concepts
 
-Details for each instrument in a book
-```
-instruments(book("US Eq Flow")) 
----
-{ name: "TSLA" price: 541.21, ..},
-{ name" "XS0629974545", price: -0.00456, ..}
-...
-```
-Number of positions in a book
-``` 
-size(positions(book("US Eq Flow")))
----
-{book: "US Eq Flow", size: 591}
-
-```
-Current price of entire book (i.e. all positions)
-```
-price(book("US Eq Flow"))
----
-{book: "US Eq Flow", price: -0.003906}
-```
-We'll come back to the mechanics of pricing - a lot is happening to derive this value. 
-
-## What happens when we book a trade
-
-### Security - financial instrument 
-   * Trade is on one security - e.g. cash equity trade on Tesla (TSLA)
-
-### Position - what happens when trade is booked
-   * Position = total holding of a particular type of instrument in a book
-   * Positions incremented by trade actions
-   * Increments can happen in any order, will result in same qty
-   * Things of interest:
-      * Book name
-      * Instrument
-      * Qty - amount of instrument held (could be -ve) 
-      * `Price = Price (Instrument) * Qty`
-      * Trade id's: list of contributing trades and associated qty
+## What happens when a trade is booked
+   
+### Position 
+A _position_ is the total holding (quantity) of a particular security in a book; positions incremented by trade actions - those increments can happen in any order, they will always result in same quantity. A position will have:
+ * Book
+ * Instrument
+ * Quantity - amount of instrument held (could be -ve) 
+ * Price, derived as `Price = Price (Instrument) * Qty`
+ * Trade list: contributing trades and associated quantity
 
 List positions in a book:
 ``` 
 positions(book("US Eq Flow"))
 ---
-{book: "US Eq Flow", instrument: "TSLA", quantity: 300, price: 162,363},
-{book: "US Eq Flow", instrument: "XS0629974545", quantity: 20, price: 20.42}
+{ "book": "US Eq Flow", "instrument": "TSLA", "quantity:" 300, "price": 162,363},
+{ "book": "US Eq Flow", "instrument": "XS0629974545", "quantity": 20, "price": 20.42}
 ...
 ```
-Price is derived from formula: `Price(TSLA) * qty = 541.21 * 300 = 162,363`
+Price for first position is derived from formula: `Price(TSLA) * qty = 541.21 * 300 = 162,363`, how the instrument price is derived will be covered in a bit.
 
-
-### Trade - makes it all happen
+### Trade 
+Makes it all happen:
    * Drives change in risk/pnl
    * Modifies positions in two books
    * Double entry book keeping - position effects across both books sum to zero (yes, its a bit like an accounting ledger)
 
 Example trade:
 ```
-Trade Details {
-  Portfolio_a: "US Eq Flow", 
-  Portfolio_b: "Third Rock Investments",
-  Trader: "Sammy Bruce",
-  Trade Type: "Sell",
-  Quantity: 10
-  Quantity Unit: "TSLA"
-  Unit Price: 540.10
-  Unit Currency: "USD"
+{ "tradeDetails": {
+  "book_a": "US Eq Flow", 
+  "book_b": "Third Rock Investments",
+  "trader": "Sammy Bruce",
+  "tradeType": "Sell",
+  "quantity": 10
+  "quantityUnit": "TSLA"
+  "unitPrice": 540.10
+  "unitCurrency": "USD"
   ...
-}
+}}
 ```
+ 
 Lets book the trade ..
 ```
- trade = tradeAPI::book(Trade Details)
+ trade = tradeService.book(tradeDetails)
 ```
 .. and understand what happens - the trade modifies positions between two books, one book goes up by the quantity bought/sold, the other down by the same amount - the net effect across both books should always be zero. We'd expect the following increments (decrements) on the _position_ for this trade: 
 ```
@@ -133,52 +114,61 @@ Instrument: TSLA
 ```  
 We knew the quantity before the trade was 300:
 ```
-{book: "US Eq Flow", instrument: "TSLA", quantity: 300, price: 162,363},
+{ "book": "US Eq Flow", "instrument": "TSLA", "quantity": 300, "price": 162,363 },
 ```
 So we'd expect quantity to now be `300 - 10 = 290` and the price to go down also  
 ```
 positions(book("US Eq Flow"), instrument("TSLA"))
 ---
-Book: US Eq Flow
-Instrument: TSLA
-Price: 156,950
-Quantity: 290
-
-Trades: 
-| Quantity | Trade Id | Counterparty           |
-| -10      | 8        | Third Rock Investments |
-| 200      | 7        | Blue Sky               |
-| 50       | 6        | Third Rock Investments |
-| -50      | 5        | Third Rock Investments |
-| 100      | 4        | Third Rock Investments |
+{ "book": "US Eq Flow", "instrument": "TSLA", "quantity": 290, "price": 156,950 
+  "trades" [
+     { "id:" 8, "quantity": -10, "counterparty": "Third Rock Investments"},
+     { "id:" 7, "quantity": 200, "counterparty": "Blue Sky"},
+     { "id:" 6, "quantity": 50, "counterparty": "Third Rock Investments"},
+     { "id:" 5, "quantity": -50, "counterparty": "Third Rock Investments"},
+     { "id:" 4, "quantity": 100, "counterparty": "Third Rock Investments"},
+  ]
+}
 ```   
 
-In the example transaction Sammy is selling 'Third Rock Investments' 10 shares in TSLA at 540.10 each; he might be providing brokerage facilities for which he'll get a commission (not shown), alternatively he cold be acting as a market maker for a large investment bank, making a profit on the bid /offer spread, or he could be acting as both. If he already owned the stock, his profit will be difference between what he bought it for, and what it was just sold for (plus commission/spread). Buy low, sell high. If he did not own the stock, he's just done a _short trade_ and would have borrowed the stock he just sold; until he gives it back, he'll be charged a bit of interest, but more significantly, will be open to the risk the stock price will go up before he closes out the position (by buying the shares and giving them back to whoever lent them), that risk will be need to carefully managed by the trader.    
+Trade we just did is 1st row (trade ID 8). 
+
+Sidebar: Sammy might be providing brokerage facilities for which he'll get a commission (not shown), alternatively he cold be acting as a market maker for a large investment bank, making a profit on the bid /offer spread, or he could be acting as both. If he already owned the stock, his profit will be difference between what he bought it for, and what it was just sold for (plus commission/spread). Buy low, sell high. If he did not own the stock, he's just done a _short trade_ and would have borrowed the stock he just sold; until he gives it back, he'll be charged a bit of interest, but more significantly, will be open to the risk the stock price will go up before he closes out the position (by buying the shares and giving them back to whoever lent them), that risk will be need to carefully managed by the trader.    
+
+### Book operations
+From a book, it should be possible to derive: 
+ * Positions - a book is essentially a collection of positions
+ * Instruments (shallow) - instruments taken from those positions (generally non-zero quantity to filter out noise)
+ * Instruments (deep): recursive instruments for each (shallow) instrument - more complex trade structures will be composed of multiple instruments
+ * Price, current value of the book: `price = [sum] for each instrument {price(instrument) * instrument quantity}`
+
+
+Retrieve instruments in a book
+```
+instruments(book("US Eq Flow")) 
+---
+{ "name": "TSLA", "price": 541.21, ..},
+{ "name" "XS0629974545", "price": -0.00456, ..}
+...
+```
+Number of positions in a book
+``` 
+size(positions(book("US Eq Flow")))
+---
+{ "book": "US Eq Flow", "size": 591}
+
+```
+Current price of entire book (i.e. all positions)
+```
+price(book("US Eq Flow"))
+---
+{ "book": "US Eq Flow", price: -0.003906}
+```
+The next section looks into the mechanics of pricing - a lot is happening to derive this value. 
+
 
 ### Pricing
-What is pricing? The price of an instrument is its value (in a given currency) for a specified set of _market conditions_. 
-
-We've already seen its possible to get the price at different levels of granularity, from lowest to highest:
-```
-price(instrument("TSLA"))
-price(position(book("US Eq Flow"), instrument("TSLA"))
-price(book("US Eq Flow"))
- 
-```
-Its really the instrument level price that does the hard work, the others are just scaling or aggregating the instrument level value
-
-Position level:
-```
-price(position) = price(instrument) * position qty
-``` 
-Book level: 
-```
-price = 0.0
-for position in book:
-   price += price(position)
-```
-
-Changing the value of a market condition (also known as a _risk factor_) can change the value of the price. Lets look at a silly example where _jam_ is our instrument - its price is influenced by the cost of its ingredients, these are its risk factors, if they change the cost of the jam changes as well.    
+The price of an instrument is its value (in a given currency) for a specified set of _market conditions_, changing the value of a market condition (also known as a _risk factor_) will result in a change to the price. Lets look at a silly example where _jam_ is our instrument - its price is influenced by the cost of its ingredients, these are its risk factors, if they change the cost of the jam changes as well.    
 ```
 price(jam) = price(strawberries) + price(sugar)
            = $1.02 + $0.20
@@ -186,7 +176,9 @@ price(jam) = price(strawberries) + price(sugar)
 ```
 If sugar went up by 2 cents the price of jam would go up to $1.24. 
 
-There are other factors, and the more we can model the more accurate the price will be. If some factors are missed off and they subsequently change in value, then this wont be reflected in the price, leading to inaccurate pnl and risk management/reporting.    
+There are other factors, and the more that can modelled the more accurate the price will be. If some factors are missed off and they subsequently change in value, then this wont be reflected in the price, leading to inaccurate pnl and risk management/reporting.    
+
+How would a cash equity instrument be priced? If price was for a trading desk the trader would probably just need the current spot, available from a market data provider like Reuters - [TSLA.OQ](https://www.reuters.com/companies/TSLA.OQ), which would suffice for accurate hedging. Another approach is Net Present Value (NPV) which looks at future dividends and cashflows, discounting them back to derive the PV. To make the example a bit more interesting we'll assume this is the model in use.
 
 #### A simple pricing API
 A pricing service provides top level API to price things: instruments, positions, and books. It requires a  _pricing context_ which contains the valuation date, information to help resolve dependencies and other parameters to control pricing. 
@@ -198,8 +190,8 @@ What happens inside call to price `price`? There's a few collaborating _services
 * `modelService` - provide the model to price given instrument with, the model is used to derive the risk factors 
 * `dependencyService` - determine market data dependencies for given risk factor and resolve dependency using pricing context
 * `productDataProvider` & `marketDataProvider` - load product and market data for given set of resolved dependencies 
-
-Lets consider our cash equity instrument, the model could be some sort of Net Present Value (NPV) approach that looks at the current spot and future dividends and cashflows, discounting them back to derive the PV. So somewhere in the `modelService` the following instrument type to model mapping will be defined:
+ 
+Somewhere in the `modelService` the following instrument type to model mapping will be defined:
 ```
 cash equity --> model (Equity Net Present Value)
 ``` 
@@ -207,7 +199,8 @@ cash equity --> model (Equity Net Present Value)
 
 What sort of risk factors would be derived from this model? They would include: spot; future cashflows (dividends/non dividend); yield curve (to discount cashflows). 
 
-What might we expect the `dependencyService` resolved market data dependencies to look like? Remember we said they'd be like a URI? A good guess would be the following strings (assume valuaton date is 21-04-2020):
+What might the `dependencyService` resolved market data dependencies look like? Something human readable but understood by a system generally works well, so something like:     
+A good guess would be the following strings (assume valuation date is 21-04-2020):
 
 ```
 /instrument/TSLA/21-04-2020
@@ -216,13 +209,12 @@ What might we expect the `dependencyService` resolved market data dependencies t
 /cashflows/TSLA/21-04-2020
 /curve/USD/21-04-2020
 ```  
-These 'co-ordinates' are then passed to the `productDataProvider` & `marketDataProvider` to load data in some shape or form - it could be json, xml, or something else, but will be based on how its stored in the data provider and not necessarily what is required for pricing. 
+If these look a little bit like the _path_ part of a _URI_ then thats intentional, it should be possible to prefix a protocol and hostname to get the full URI to pass to the `productDataProvider` & `marketDataProvider` to load data. 
+ 
+The format of the product and market data could be json, xml, or something else, based on what the data provider supports, and not necessarily what is required for pricing, so will need transforming into a representation understood by the `pricingService`. The pricing service should provide an API to help construct the relevant representation - it may, for example, have its own object model that needs hydrating and provide a series of factories to create.   
 
-The product and market data will need transforming into a representation understood by the `pricingService` - it may, for example, have its own object model that needs hydrating. 
-
-Finally the transformed data will be passed to the `pricingService` to perform the actual pricing, where some sort of mathematical computations as defined in the pricing model will be applied to the data to derive the price.    
+Finally the transformed data will be passed to the `pricingService` to perform the actual pricing, where some sort of mathematical computations as defined in the pricing model will be executed against the data to derive the price.    
   
-
 Putting it all together `pricingService.price(instrument)` will look something like this:
 ```
 // get the pricing model for given instrument type 
@@ -246,11 +238,24 @@ pricingData = transform(productData, marketData)
 // price 
 price = pricingService.price(context, model, pricingData)
 ```
-What about pricing a position? 
+It should be possible to price at different levels of granularity:
 ```
-price = price(position.instrument) * position.qty
-```
+price(instrument("TSLA"))
+price(position(book("US Eq Flow"), instrument("TSLA"))
+price(book("US Eq Flow"))
+ ```
 Both pricing a position and a book just need to call into this instrument level price code, with scaling applied with the position quantity.  
+
+Position level:
+```
+price(position) = price(instrument) * position qty
+``` 
+Book level: 
+```
+price = 0.0
+for position in book:
+   price += price(position)
+```
 
 ### Other considerations when designing a trade API
 Key things are to have a _clear domain_, _functional segregation_, _business logic barriers_, and excessive _automated regression testing_.
@@ -272,10 +277,10 @@ When an instrument needs pricing, a model that defines the pricing methodology n
 #### How to classify an instrument type
 Consistent and accurate classification of an instrument is vital to selection of the correct pricing model, and therefore accurate risk. It sounds simple, but different systems will have different views and complexities arise as products evolve and start to have different variants driven by arbitrary product attributes set in the booking systems.  
 
-#### How are market data dependencies defined and resolved 
-Market data dependencies define the data needed to price something for a given model. e.g. for our equity cash, we'll need at least the security object, current/spot price, dividends schedule, and yield curve (for discounting). Logic to identify and load market data dependencies will require both product and pricing model attributes.  It may be rules or template based (not in code) and ideally a consistent approach applied for all instrument types.     
+#### How are market data dependencies identified, resolved, and loaded 
+Market data dependencies define the data needed to price something for a given model. e.g. for equity cash we defined the security object, current/spot price, dividends schedule, and yield curve (for discounting). Logic to identify and load market data dependencies will require both product and pricing model attributes.  It may be rules or template based (not in code) and ideally a consistent approach applied for all instrument types.     
 
-Resolution involves loading the actual data from product and market data providers (typically an external group within the bank) - co-ordinates must be constructed to load data of the correct type and variant and for the specified valuation date. This is often a matching exercise, matching `function(pricing model, instrument type)` to a particular type of market data either sourced externally (e.g. Reuters) or saved down internally by the desk strats. Ideally the end point is a type of `URI` - a simple, easy to understand string that can be passed to the data provider. 
+Resolution involves identifying the actual data to load from product and market data providers (typically an external group within the bank) for a given product and model. Co-ordinates must be constructed to load data of the correct type and variant and for the specified valuation date. This is often a matching exercise, matching `function(pricing model, instrument type)` to a particular type of market data either sourced externally (e.g. Reuters) or saved down internally by the desk strats. Ideally the end point is a type of `URI` - a simple, easy to understand string that can be passed to the data provider. 
  
 Loading all of this data can take time, especially if pricing the whole book, whilst once loaded it often has to be transformed and manipulated into a state the pricing code accepts. Unless the data is directly linked to the security (e.g. dividends), it may well be shared across different instruments - yield or funding curves on same ccy are a good example, so intelligent caching and data re-use can help reduce load times.       
 
@@ -289,7 +294,7 @@ Given risk systems are part of a complex graph of upstream and downstream system
 How to avoid things like reloading same market, or re-pricing for same underlying. Having a clearly defined calculation unit, say, a book, is a a good starting point, as this can be scanned for optimisations e.g. pull out unique set of product and market data and batch load/transform. Optimisations can also exist at the pricing model level, requiring more complex logic in how pricing requests are generated.        
     
 ### Recap 
-Alright, we made it to the end, we've covered what happens when a trade is booked, some of the key concepts like a _book_, _position_, _trade_, and _instrument_; how to price an instrument with some pseudo code for a simple pricing service, and discussed some of the other challenging building out these types of system.   
+Alright, we made it to the end, we've covered what happens when a trade is booked, some of the key concepts like a _book_, _position_, _trade_, and _instrument_; how to price an instrument with some pseudo code for a simple pricing service, and discussed some of the other challenges building out these types of system.   
 
 In the next article we'll look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is presented, followed by a look at Object Relational Mapping (ORM).    
 
