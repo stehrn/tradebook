@@ -36,26 +36,28 @@ CREATE TABLE instrument (
 );
 ```
 
-The `trade` table records the two parties involved in the trade via a reference to the trading and client book (we've called them `portfolio_a`  and `portfolio_a`) and the trader, the direction of the trade - whether it was a buy (`B`) or sell (`S`), the quantity traded, and the details on the instrument including its price and base currency. We've not shown it here, but settlement details will also be linked to the trade.
+The `trade` table records the two parties involved in the trade via a reference to the trading and client book (we've called them `book_a`  and `book_a`) and the trader, the direction of the trade - whether it was a buy (`B`) or sell (`S`), the quantity traded, and the details on the instrument including its price and base currency. We've not shown it here, but settlement details will also be linked to the trade.
 ```sql
 CREATE TABLE trade (
   id INT AUTO_INCREMENT  PRIMARY KEY,
-  portfolio_a INT NOT NULL,
-  portfolio_b INT NOT NULL,
+  book_a INT NOT NULL,
+  book_b INT NOT NULL,
   trader VARCHAR(100) NOT NULL,
   trade_type CHAR(1) NOT NULL,  
   quantity INT NOT NULL,
   instrument_id  INT NOT NULL,
   unit_price DECIMAL(10,5),
   unit_ccy CHAR(3) NOT NULL,
-  FOREIGN KEY (portfolio_a) REFERENCES book(id),
-  FOREIGN KEY (portfolio_b) REFERENCES book(id),
+  FOREIGN KEY (book_a) REFERENCES book(id),
+  FOREIGN KEY (book_b) REFERENCES book(id),
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
 ```
 (other possible names for this table - `order` or `transaction`?)
 
-A little trick can be used when inserting data into the `trade` table -  if its a sell the `quantity` is negative, otherwise positive - this avoids having _case_ like statements in your sql but requires any business logic (in sql, source code, or elsewhere) to be aware of this convention.    
+A little trick can be used when inserting data into the `trade` table -  if (party for) book a is selling then `quantity` is negative, otherwise positive - this avoids having _case_ like statements in your sql but requires any business logic (in sql, source code, or elsewhere) to be aware of this convention.    
+
+
 
 The position table holds the _total_ holdings of an instrument in a book at a particular point in time. It could be tempting to use the trade table to derive the same aggregate view of the open position quantity, in practice its a bit more efficient to store position separately and avoid the trade table queries (even with well thought out indexes). Bear in mind this introduces the risk the trade and position tables don't match if an edit is done in one table but not the other. It should, however, always be possible to regenerate the position table from the trade table.      
 ```sql
@@ -73,32 +75,32 @@ This in the final schema and relationships:
 
 ![Database Schema](img/schema.png)
 
-(created using [dbdiagram.io](http://dbdiagram.io))
+(created using [dbdiagram.io](https://dbdiagram.io/d/5e8e42443d30f00839b3b7f9))
  
 # What happens when a trade is booked?
 
 Lets continue the example from the first article where we had this trade:
 ```
-Trade Details {
-  Portfolio_a: "US Eq Flow", 
-  Portfolio_b: "Third Rock Investments",
-  Trader: "Sammy Bruce",
-  Trade Type: "Sell",
-  Quantity: 10
-  Quantity Unit: "TSLA"
-  Unit Price: 540.10
-  Unit Currency: "USD"
+{ "tradeDetails": {
+  "book_a": "US Eq Flow", 
+  "book_b": "Third Rock",
+  "trader": "Sammy Bruce",
+  "tradeType": "Sell",
+  "quantity": 10
+  "quantityUnit": "TSLA"
+  "unitPrice": 540.10
+  "unitCurrency": "USD"
   ...
-}
-```
+}}
+```  
 Lets assume ops have set up our books and the product team have set up the TSLA security (our entity is made up, the denomination is USD so it would probably be a US business line)
 
-`select * from book where entity where DISPLAY_NAME in ('US Eq Flow', 'Third Rock Investments')`
+`select * from book where entity where DISPLAY_NAME in ('US Eq Flow', 'Third Rock')`
 
 |ID |BOOK_TYPE  	|DENOMINATED  	|DISPLAY_NAME  	        |TRADER  	 |ENTITY  |
 |---|---------------|---------------|-----------------------|------------|--------|
 |5	|Profit Centre	|USD	        |US Eq Flow	            |Sammy Bruce |USTRD   |
-|6	|Client Book	|USD	        |Third Rock Investments	|null	     |USTRD   |
+|6	|Client Book	|USD	        |Third Rock	            |null	     |USTRD   |
 
 (make a mental note of IDs here as used in upcoming sql)
 
@@ -106,14 +108,14 @@ Lets assume ops have set up our books and the product team have set up the TSLA 
 
 |ID|NAME|
 |---|---|
-|8|TSLA|  
+|8  |TSLA|  
 
  (yes, light on detail, this is all we need for the example)
 
 From this trade we'd expect one new row to be inserted into the `trade` table as per the above trade details
-sql (portfolio id's are from the book table):
+sql (book id's are from the book table):
 ```sql
-INSERT INTO trade (portfolio_a, portfolio_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
+INSERT INTO trade (book_a, book_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
   (5, 6, 'Sammy Bruce', 'B', -10, 8, 540.10, 'USD')
 ``` 
 (its a sell so we use that trick and make quantity -ve)
@@ -125,7 +127,7 @@ Quantity: -10
 Instrument: TSLA
 ```
 ```
-Book Name: Third Rock Investments
+Book Name: Third Rock
 Quantity: 10
 Instrument: TSLA
 ```  
@@ -213,10 +215,10 @@ A rate would be loaded for given business date/time and given currency pair, and
 In the proceeding examples for simplicity we dont apply fx conversion (and we get away with since all trades are in USD)
 
 # Sample queries
-In all cases portfolio_a is trader book and portfolio_b is client book
+In all cases book_a is trader book and book_b is client book
 
 ## Find the current position of the firm 
-Determine how long and short the firm is on each of the securities it trades - the `position` table makes this simple with a join on the `trade` table to only select firm side positions associated with a risk book: 
+Determine how _long_ and _short_ the firm is on each of the securities it trades - a long position means instrument has been bought and is owned, short on the other hand means the instrument has not been bought yet and is owed to a another party. The `position` table makes this simple with a join on the `trade` table to only select firm side positions associated with a risk book: 
  ```
 SELECT i.name          AS instrument, 
        SUM(p.quantity) AS position 
@@ -253,22 +255,22 @@ Note use of absolute (`ABS`) function to pull in top 10 regardless of the sign.
 ## Query those tables to find the trader with the highest aggregate exposure among their top five securities.
 This is a non trivial query that makes use of [ROW_NUMBER](https://www.sqltutorial.org/sql-window-functions/sql-row_number/) and [PARTITION](https://www.sqltutorial.org/sql-window-functions/sql-partition-by/): to find the nth highest value per group
  
-* the `PARTITION BY` clause distributes the trades by (trading) portfolio
-* the `ORDER BY` clause sorts the trades in each portfolio by exposure
-* the `ROW_NUMBER()` assigns each row a sequential integer number, it resets the number when the portfolio changes
+* the `PARTITION BY` clause distributes the trades by (trading) book
+* the `ORDER BY` clause sorts the trades in each book by exposure
+* the `ROW_NUMBER()` assigns each row a sequential integer number, it resets the number when the book changes
 
 ```
 SELECT TOP 1 b.trader, 
        SUM(aggregate.exposure) AS exposure 
-FROM   (SELECT portfolio_a                                   AS trader, 
+FROM   (SELECT book_a                                   AS trader, 
                instrument_id, 
                SUM(quantity * unit_price)                    AS exposure, 
                ROW_NUMBER() 
                  OVER( 
-                   PARTITION BY portfolio_a 
+                   PARTITION BY book_a 
                    ORDER BY SUM(quantity * unit_price) DESC) AS rank 
         FROM   trade 
-        GROUP  BY portfolio_a, 
+        GROUP  BY book_a, 
                   instrument_id 
         ORDER  BY trader, 
                   rank) aggregate, 
@@ -299,7 +301,7 @@ So how do we use what we've looked at so far in a Java application? We started w
 
 Many teams try and avoid hand crafting and maintaining sql queries for specific database vendors, relying instead on Object Relational Mapping (ORM). This lets us deal in Java objects (typically POJOs), database specifics are abstracted away, and different data providers can be plugged in with a bit of configuration, no sql needs to be written.   
  
-There are lots of ORM libraries out there, we'll look at [jOOQ Object Oriented Querying (jooq)](https://www.jooq.org) which generates Java objects from an existing table schema and will let us build type-safe SQL queries through a fluent API.
+There are lots of ORM libraries out there, we'll look at [jOOQ Object Oriented Querying (jooq)](https://www.jooq.org) which generates Java objects from an existing table schema and will let us build type-safe SQL queries through a fluent API. [Spring JPA](https://spring.io/guides/gs/accessing-data-jpa/) is worth a look also, particularly since its based on the Java persistence API - a specification for accessing relational data; it does require you to write your own POJOs but benefits from the fact is widely supported by other types of ORM and is extensively used.
  
 ORMs let you do it the other way round as well - if you have a set of Java objects with relevant annotations a database schema can be auto-generated.    
  
@@ -351,9 +353,9 @@ A slightly more complex example returns all the trades for a given position, e.g
 The presentation is not pretty but you'll see (trade quantity, trade ID, counterparty/customer book):
 ```java
 [
-  [100,4,"Third Rock Investments"],
-  [-50,5,"Third Rock Investments"],
-  [50,6,"Third Rock Investments"],
+  [100,4,"Third Rock"],
+  [-50,5,"Third Rock"],
+  [50,6,"Third Rock"],
   [200,7,"Blue Sky"]
 ]
 ```
@@ -366,3 +368,11 @@ Its worth mentioning one of the alternatives to a relational databases - noSQL. 
 In many cases teams wont hand craft sql but rather delegate things to an ORM, although an understanding of the underlying sql will help when looking into bugs or dealing with support or non-functional issues such as slow performance.  
 
 Thanks for reading!
+
+
+ 
+
+
+
+
+  

@@ -1,7 +1,7 @@
 # Risk System Concepts - Trade Booking & Pricing
 
 ## Overview
-This article will give you a flavour for how risk systems works, looking at trading desk concepts including: 
+This article will give you a flavour of how a risk system works, looking at trading desk concepts including: 
 * what is a trade and how can it be modelled 
 * what you need before booking a trade
 * what happens when a trade is booked 
@@ -143,7 +143,6 @@ From a book, it should be possible to derive:
  * Instruments (deep): recursive instruments for each (shallow) instrument - more complex trade structures will be composed of multiple instruments
  * Price, current value of the book: `price = [sum] for each instrument {price(instrument) * instrument quantity}`
 
-
 Retrieve instruments in a book
 ```
 book("US Eq Flow").instruments() 
@@ -157,7 +156,6 @@ Number of positions in a book
 book("US Eq Flow").positions().size()
 ---
 { "book": "US Eq Flow", "size": 591}
-
 ```
 Current price of entire book (i.e. all positions)
 ```
@@ -202,7 +200,6 @@ cash equity --> model (Equity Net Present Value)
 What sort of risk factors would be derived from this model? They would include: spot; future cashflows (dividends/non dividend); yield curve (to discount cashflows). 
 
 What might the `dependencyService` resolved market data dependencies look like? Something human readable but understood by a system generally works well, so something like:     
-A good guess would be the following strings (assume valuation date is 21-04-2020):
 
 ```
 /instrument/TSLA/21-04-2020
