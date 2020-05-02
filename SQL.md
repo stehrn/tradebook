@@ -1,5 +1,10 @@
 # Overview 
-This article will look at the relational database schema for a trading application and some example queries that could be run for different use cases. A simple way to run and test queries locally using an embedded in-memory database is presented, followed by a look at alternatives to hand crafted sql through the use of Object Relational Mapping (ORM).    
+This article presents a relational database schema for a trading application and examines what happens when a trade is executed, including how to handle fx conversion of monetary amounts and trade history via bi-temporal chaining. We look at some typical trade reporting use cases and associated sql queries, and show a simple way to run and test queries locally using an embedded [H2](https://www.h2database.com/html/main.html) in-memory database. 
+
+
+    
+In the final section we discuss some of the different ways to access the database model within a Java application before choosing the 'ORM-alternative' database library [jOOQ](https://www.jooq.org) with a demo using a simple Spring Boot application. 
+
 
 # Domain Model
 From the previous article, we defined three key parts to the domain:
@@ -26,7 +31,7 @@ CREATE TABLE book (
 );
 ```
 
-An `instrument` is the thing been traded, it has a human readable name together with industry standard identifiers (e.g. ISIN, SEDOL), plus a bunch of attributes that will be used for pricing purposes; there will also be 
+An `instrument` is the thing been traded, it has a human readable name together with industry standard identifiers (e.g. ISIN, SEDOL), plus a bunch of attributes that will be used for pricing purposes. 
 ```sql
 CREATE TABLE instrument (
   id INT AUTO_INCREMENT  PRIMARY KEY,
@@ -173,15 +178,14 @@ First invalidate (aka 'chain out') the old row by setting `OUT_Z` to the current
 |--------|------|--------|------|--------|------|--------|
 |6|5|100|Apr 20|Infinity|Apr 20|Apr 23|
 
-Next insert a new row with previous position + 10, 
-
-|BOOK_ID  |INSTRUMENT_ID  |QUANTITY   |FROM_Z|THRU_Z  |IN_Z  |OUT_Z   |
-|--------|------|--------|------|--------|------|--------|
-|6|5|110|Apr 23|Infinity|Apr 23|Infinity|
-
-These table entries tell us:
+Next insert two new rows to indicate:
 * From Apr 20 to Apr 23, position = 100 
 * From Apr 23 to Infinity, position = 110 (previous position + 10)
+  
+|BOOK_ID  |INSTRUMENT_ID  |QUANTITY   |FROM_Z|THRU_Z  |IN_Z  |OUT_Z   |
+|--------|------|--------|------|--------|------|--------|
+|6|5|100|Apr 20|Apr 23|Apr 23|Infinity|
+|6|5|110|Apr 23|Infinity|Apr 23|Infinity|
  
 To get the _current_ position (i.e `OUT_Z=Infinity`) as-of current business date: 
 ```sql
@@ -234,6 +238,14 @@ ORDER  BY position DESC
 ```
 Note we group across book/instrument, summing up the quantities to get overall per instrument rather than breakout by book, and we chose to filter out flat (zero) positions
 
+```
+|INSTRUMENT   |POSITION|
+|-------------|--------|  
+|TSLA	      |300     |
+|XS0629974888 |100     |
+|XS0124569566 |60      |
+|XS0629974352 |7       |
+```
 ## Find the ten securities to which the firm has the greatest exposure (either long or short)
 _Exposure_ is a general term that can refer to the total market value of a position, the total amount of possible risk at any given point, or the portion of a fund invested in a particular market or asset.
 
@@ -252,7 +264,16 @@ ORDER  BY ABS(SUM(t.quantity * t.unit_price)) DESC
 ```
 Note use of absolute (`ABS`) function to pull in top 10 regardless of the sign. 
 
-## Query those tables to find the trader with the highest aggregate exposure among their top five securities.
+```
+|INSTRUMENT   |EXPOSURE     |
+|-------------|-------------|  
+|TSLA         |159997.00000 |
+|XS0629974888 |100310.63940 |
+|XS0124569566 |1946.82000   |
+|XS0629974352 |700.71500    |
+|XS0104440986 |-238.95000   |
+```
+## Find the trader with the highest aggregate exposure among their top five securities.
 This is a non trivial query that makes use of [ROW_NUMBER](https://www.sqltutorial.org/sql-window-functions/sql-row_number/) and [PARTITION](https://www.sqltutorial.org/sql-window-functions/sql-partition-by/): to find the nth highest value per group
  
 * the `PARTITION BY` clause distributes the trades by (trading) book
@@ -280,6 +301,11 @@ AND    b.id = aggregate.trader
 GROUP  BY aggregate.trader 
 ORDER  BY exposure DESC 
 ``` 
+```
+|TRADER      |EXPOSURE     |
+|------------|-------------|  
+|Sammy Bruce |159997.00000 |
+```
 Note we've taken _trader_ to refer to the desk head associated with a book rather than the one involved in a single deal (and recorded on the `trade` table).
 
 # Using embedded H2 database inside browser to run sql queries
@@ -296,16 +322,35 @@ You should see something like this:
 
 You can run any of the sql defined above in the browser.
 
-# Adding a Java ORM layer
-So how do we use what we've looked at so far in a Java application? We started with a database schema and  could use [JDBC](https://docs.oracle.com/javase/tutorial/jdbc/basics/index.html) to execute sql, and this may be fine for some teams who have decent sql experience and are happy with the tight coupling to the persistence layer.  
+# Accessing the database model within a Java application
+So how to make use of the relational model we've defined so far within a Java application? 
 
-Many teams try and avoid hand crafting and maintaining sql queries for specific database vendors, relying instead on Object Relational Mapping (ORM). This lets us deal in Java objects (typically POJOs), database specifics are abstracted away, and different data providers can be plugged in with a bit of configuration, no sql needs to be written.   
- 
-There are lots of ORM libraries out there, we'll look at [jOOQ Object Oriented Querying (jooq)](https://www.jooq.org) which generates Java objects from an existing table schema and will let us build type-safe SQL queries through a fluent API. [Spring JPA](https://spring.io/guides/gs/accessing-data-jpa/) is worth a look also, particularly since its based on the Java persistence API - a specification for accessing relational data; it does require you to write your own POJOs but benefits from the fact is widely supported by other types of ORM and is extensively used.
- 
-ORMs let you do it the other way round as well - if you have a set of Java objects with relevant annotations a database schema can be auto-generated.    
- 
-The maven project [pom](pom.xml) contains a profile to auto-generate Java source using jooq - it  points to the schema file and the package name and directory for the generated source to be written to. To create source run:
+[JDBC](https://docs.oracle.com/javase/tutorial/jdbc/basics/index.html) is an option, it could be used to execute the hand crafted sql defined in the previous section, but there'd be a lot of boilerplate code to write first - code to access the database and transform results to/from a reasonable Java representation. For many engineers (working diligently through the [Java Tutorial](https://docs.oracle.com/javase/tutorial/jdbc/basics/index.html)) its their first taste of connecting to a database via Java, and for simple projects it may well suffice.  
+   
+A better alternative is to use a Java database library that can auto-generate code from an _existing_ database and provide a API to build type-safe SQL queries - this means compile time checks and avoidance of runtime errors linked to incorrect data type conversion. They also provide better database portability since potentially database vendor specific sql wont be embedded inside the Java code.
+
+Object relational Mapping (ORM) turns things around, instead of the relational data model driving the application design, the application design drives the data model(s). Start with the Java object design and use an ORM to map the object model to a relational data model, the diagram shows the object model on the left, database tables and rows on the right, and arrows to indicate the work the ORM needs to do to bind the two together. 
+
+![ORM](img/orm.png)
+
+(source [Martin Fowler](https://martinfowler.com/bliki/OrmHate.html))
+
+ORMs are great if you want to focus on your Java object model and avoid getting near anything that looks like sql; Martin Fowler provides a [good critique](https://martinfowler.com/bliki/OrmHate.html) of ORMs and points towards a non-relational database alternative - noSQL. noSQL, as the name implies, has no schema as such, for our trading application we'd probably store some sort of json representation of trades and positions like we saw in the first article: 
+
+```
+{ "book": "US Eq Flow", "instrument": "TSLA", "quantity": 290, "price": 156,950 
+  "trades" [
+     { "id:" 8, "quantity": -10, "counterparty": "Third Rock Investments"},
+     { "id:" 7, "quantity": 200, "counterparty": "Blue Sky"},
+     { "id:" 6, "quantity": 50, "counterparty": "Third Rock Investments"},
+     { "id:" 5, "quantity": -50, "counterparty": "Third Rock Investments"},
+     { "id:" 4, "quantity": 100, "counterparty": "Third Rock Investments"},
+  ]
+}
+```   
+Having no rigid schema can help with data and applications that are evolving - its easy to add something to a json message compared to adding a column to a database table. noSQL databases also easily scale horizontally, often run as a distributed cluster providing resilience as well. The cost here is giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex queries and reporting and high transaction rates, whilst not adhering to ACID properties could mean losing real money. It could be done though. 
+
+Since our trading app already has a database model lets choose the 'ORM-alternative' database library [jOOQ Object Oriented Querying (jOOQ)](https://www.jooq.org), its tag-line sums it up - "the easiest way to write SQL in Java". The maven project [pom](pom.xml) contains a profile to auto-generate Java source - it  points to the schema file and the package name and directory for the generated source to be written to; to generate run:
 ```
 mvn generate-sources -P jooq
 ```
@@ -335,17 +380,22 @@ public class Book implements Serializable {
 
 ...
 ```
-Wiring jooq into Spring Boot is easy (see [Spring Boot documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-jooq)). 
-
-To see it in use in the demo app, go to `http://localhost:8080/listPositions`, which is running this code:
+Wiring jOOQ into Spring Boot is easy (see [Spring Boot documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-jooq)), a very basic demo app (really just a spike), has been written illustrate this for the trade database, to see it in action go to `http://localhost:8080/listPositions`, which is running this code (see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java)):
 
 ```java
 Configuration jooqConfiguration = <autowired by Spring Boot>
 PositionDao positionDao = new PositionDao(jooqConfiguration);
 List<Position> positions = positionDao.findAll();
 ```
-(see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java))
-
+..which will return :
+```
+[
+  {"bookId":5, "instrumentId":8, "quantity":300},
+  {"bookId":6, "instrumentId":8, "quantity":-50},
+  {"bookId":4, "instrumentId":8, "quantity":-200},
+  ...
+]
+```
 A slightly more complex example returns all the trades for a given position, e.g. to show trades for 'US Eq Flow' risk book and 'TSLA' security:
  
 `http://localhost:8080/tradesForPosition?book=US%20Eq%20Flow&security=TSLA`
@@ -361,16 +411,16 @@ The presentation is not pretty but you'll see (trade quantity, trade ID, counter
 ```
  
 # Recap
-We've covered the domain model and sql schema for a simple trade application. If we wanted to extend this to pricing then more data would be required (an idea for a future article?). Some important factors such as fx conversion of monetary amounts and bi-temporal chaining to maintain trade history have also been discussed.  
+We've covered the domain model and sql schema for a simple trade application; if we wanted to extend this to pricing then more data would be required (an idea for a future article?). Some important factors such as fx conversion of monetary amounts and bi-temporal chaining to maintain trade history have also been discussed.  
 
-Its worth mentioning one of the alternatives to a relational databases - noSQL. There's no schema as such, which can help with data and applications that are evolving; and its easy to scale horizontally - often run as a distributed cluster - at the cost of giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex queries and reporting and high transaction rates, where not adhering to ACID properties could mean losing a lot of money.  
+In many cases teams wont hand craft sql but rather delegate things to an ORM or ORM-alternative (or both), although an understanding of the underlying sql will help when looking into bugs or dealing with support or non-functional issues such as slow performance. 
 
-In many cases teams wont hand craft sql but rather delegate things to an ORM, although an understanding of the underlying sql will help when looking into bugs or dealing with support or non-functional issues such as slow performance.  
+The demo app has scope to be extended, and [Spring JPA](https://spring.io/guides/gs/accessing-data-jpa/) is worth a look, particularly since its based on the Java persistence API - a specification for accessing relational data and mapping to objects (i.e. an ORM).  
 
 Thanks for reading!
 
 
- 
+
 
 
 

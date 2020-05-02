@@ -22,16 +22,16 @@ DROP TABLE IF EXISTS trade;
 
 CREATE TABLE trade (
   id INT AUTO_INCREMENT  PRIMARY KEY,
-  portfolio_a INT NOT NULL,
-  portfolio_b INT NOT NULL,
+  book_a INT NOT NULL,
+  book_b INT NOT NULL,
   trader VARCHAR(50),
   trade_type CHAR(1) NOT NULL,
   quantity INT NOT NULL,
   instrument_id INT NOT NULL,
   unit_price DECIMAL(10,5),
   unit_ccy CHAR(3) NOT NULL,
-  FOREIGN KEY (portfolio_a) REFERENCES book(id),
-  FOREIGN KEY (portfolio_b) REFERENCES book(id),
+  FOREIGN KEY (book_a) REFERENCES book(id),
+  FOREIGN KEY (book_b) REFERENCES book(id),
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
 
@@ -66,7 +66,7 @@ INSERT INTO instrument (name) VALUES
   ('XS0629974984'),
   ('TSLA');
 
-INSERT INTO trade (portfolio_a, portfolio_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
+INSERT INTO trade (book_a, book_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
   (1, 4, '', 'B', 10, 3, 100.123, 'USD'),
   (1, 4, '', 'S', -5, 3, 100.155, 'USD'),
   (1, 4, '', 'B', 2, 3, 100.130, 'USD'),
