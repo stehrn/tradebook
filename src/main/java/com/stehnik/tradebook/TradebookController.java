@@ -51,7 +51,6 @@ public class TradebookController {
        and t.instrument_id = i.id
        and trade_book.display_name = 'US Eq Flow'
        and i.name = 'TSLA'
-
      */
     @GetMapping("/tradesForPosition")
     public Object tradesForPosition(@RequestParam String book, @RequestParam String security) {

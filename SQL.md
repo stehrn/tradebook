@@ -1,7 +1,5 @@
 # Overview 
 This article presents a relational database schema for a trading application and examines what happens when a trade is executed, including how to handle fx conversion of monetary amounts and trade history via bi-temporal chaining. We look at some typical trade reporting use cases and associated sql queries, and show a simple way to run and test queries locally using an embedded [H2](https://www.h2database.com/html/main.html) in-memory database. 
-
-
     
 In the final section we discuss some of the different ways to access the database model within a Java application before choosing the 'ORM-alternative' database library [jOOQ](https://www.jooq.org) with a demo using a simple Spring Boot application. 
 
@@ -348,7 +346,15 @@ ORMs are great if you want to focus on your Java object model and avoid getting 
   ]
 }
 ```   
-Having no rigid schema can help with data and applications that are evolving - its easy to add something to a json message compared to adding a column to a database table. noSQL databases also easily scale horizontally, often run as a distributed cluster providing resilience as well. The cost here is giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex queries and reporting and high transaction rates, whilst not adhering to ACID properties could mean losing real money. It could be done though. 
+Having no rigid schema can help with data and applications that are evolving - its easier to add something to a json message compared to adding a new column to a database table - e.g. we might decide to track settlement in the trade, to do so we just add this to any new json entries (note how old entries remain the same): 
+```
+{ "book": "US Eq Flow", "instrument": "TSLA", "quantity": 290, "price": 156,950 
+  "trades" [
+      ... 
+     { "id:" 8, "quantity": -10, "counterparty": "Third Rock Investments"},
+     { "id:" 9, "quantity": -10, "counterparty": "Third Rock Investments", "settlement": "T+2"}
+```
+noSQL databases are also easy to scale horizontally, often run as a distributed cluster providing resilience - the cost here is giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex reporting queries and high transaction rates, whilst not adhering to ACID properties could mean losing real money. There are techniques to handle some of these issues and noSQL is still worth serious consideration.  
 
 Since our trading app already has a database model lets choose the 'ORM-alternative' database library [jOOQ Object Oriented Querying (jOOQ)](https://www.jooq.org), its tag-line sums it up - "the easiest way to write SQL in Java". The maven project [pom](pom.xml) contains a profile to auto-generate Java source - it  points to the schema file and the package name and directory for the generated source to be written to; to generate run:
 ```
@@ -380,7 +386,7 @@ public class Book implements Serializable {
 
 ...
 ```
-Wiring jOOQ into Spring Boot is easy (see [Spring Boot documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-jooq)), a very basic demo app (really just a spike), has been written illustrate this for the trade database, to see it in action go to `http://localhost:8080/listPositions`, which is running this code (see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java)):
+Wiring jOOQ into Spring Boot is easy (see [Spring Boot documentation](https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-jooq)), a very basic demo app (really just a spike), has been written illustrate this for the trade database, to see it in action go to `http://localhost:8080/listPositions`, which is running this code (see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java) positions()):
 
 ```java
 Configuration jooqConfiguration = <autowired by Spring Boot>
@@ -409,19 +415,27 @@ The presentation is not pretty but you'll see (trade quantity, trade ID, counter
   [200,7,"Blue Sky"]
 ]
 ```
- 
+The Java code to return this (see [TradebookController](src/main/java/com/stehnik/tradebook/TradebookController.java) tradesForPosition()) is below, and shows it really is like "writing SQL in Java":  
+```java
+...
+return dsl.select()
+       .from(TRADE)
+       .join(trade_book).on(TRADE.BOOK_A.eq(trade_book.ID))
+       .join(client_book).on(TRADE.BOOK_B.eq(client_book.ID))
+       .join(INSTRUMENT).on(TRADE.INSTRUMENT_ID.eq(INSTRUMENT.ID))
+       .where(trade_book.DISPLAY_NAME.eq(book))
+       .and(INSTRUMENT.NAME.eq(security))
+       .fetch()
+       .into(trade_book.DISPLAY_NAME, INSTRUMENT.NAME, TRADE.QUANTITY, TRADE.ID, client_book.DISPLAY_NAME)
+       .intoArrays();
+```  
+
 # Recap
-We've covered the domain model and sql schema for a simple trade application; if we wanted to extend this to pricing then more data would be required (an idea for a future article?). Some important factors such as fx conversion of monetary amounts and bi-temporal chaining to maintain trade history have also been discussed.  
+We've covered the domain model and schema for a simple trade application and some example sql for some common use cases. In many cases teams wont want to hand craft sql but rather delegate things to an ORM or ORM-alternative (or both). An ORM-alternative like jOOQ lets developers stay closer to the sql and relational model (even though they use Java to write it), some may want a bit more out of their Java library, to get a bit more for free and have a bit more abstraction so as not to have to literally replicate the sql query directly in Java code - this abstraction is what an ORM provides. Its worth noting an understanding of the underlying sql will certainly help when looking into bugs or dealing with support or non-functional issues such as slow performance. 
 
-In many cases teams wont hand craft sql but rather delegate things to an ORM or ORM-alternative (or both), although an understanding of the underlying sql will help when looking into bugs or dealing with support or non-functional issues such as slow performance. 
-
-The demo app has scope to be extended, and [Spring JPA](https://spring.io/guides/gs/accessing-data-jpa/) is worth a look, particularly since its based on the Java persistence API - a specification for accessing relational data and mapping to objects (i.e. an ORM).  
+The demo app has scope to be extended, and [Spring JPA](https://spring.io/guides/gs/accessing-data-jpa/) is worth a look, particularly since its based on the Java persistence API - a specification for accessing relational data and mapping to objects (i.e. an ORM). ORMs got only a brief mention above, so the next article will look at extending the Spring boot app to use an ORM and considers a noSQL based approach.   
 
 Thanks for reading!
-
-
-
-
 
 
 
