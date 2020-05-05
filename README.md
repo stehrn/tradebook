@@ -82,12 +82,12 @@ Makes it all happen:
    * Modifies positions in two books
    * Double entry book keeping - position effects across both books sum to zero (yes, its a bit like an accounting ledger)
 
-Imagine a trader has agreed to sell 10 shares in TSLA to their client 'Third Rock Investments' at 540.10 USD (the price they have both agreed on), and the trade is booked against the 'US Eq Flow' risk book, the trade details would look something like this:
+Imagine a trader has agreed to sell 10 shares in TSLA to their client 'Third Rock' at 540.10 USD (the price they have both agreed on), and the trade is booked against the 'US Eq Flow' risk book, the trade details would look something like this:
 
 ```
 { "tradeDetails": {
   "book_a": "US Eq Flow", 
-  "book_b": "Third Rock Investments",
+  "book_b": "Third Rock",
   "trader": "Sammy Bruce",
   "tradeType": "Sell",
   "quantity": 10
@@ -109,7 +109,7 @@ Quantity: -10
 Instrument: TSLA
 ```
 ```
-Book Name: Third Rock Investments
+Book Name: Third Rock
 Quantity: 10
 Instrument: TSLA
 ```  
@@ -123,11 +123,11 @@ position(book("US Eq Flow"), instrument("TSLA"))
 ---
 { "book": "US Eq Flow", "instrument": "TSLA", "quantity": 290, "price": 156,950 
   "trades" [
-     { "id:" 8, "quantity": -10, "counterparty": "Third Rock Investments"},
+     { "id:" 8, "quantity": -10, "counterparty": "Third Rock"},
      { "id:" 7, "quantity": 200, "counterparty": "Blue Sky"},
-     { "id:" 6, "quantity": 50, "counterparty": "Third Rock Investments"},
-     { "id:" 5, "quantity": -50, "counterparty": "Third Rock Investments"},
-     { "id:" 4, "quantity": 100, "counterparty": "Third Rock Investments"},
+     { "id:" 6, "quantity": 50, "counterparty": "Third Rock"},
+     { "id:" 5, "quantity": -50, "counterparty": "Third Rock"},
+     { "id:" 4, "quantity": 100, "counterparty": "Third Rock"},
   ]
 }
 ```   

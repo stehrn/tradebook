@@ -1,8 +1,9 @@
 # Overview 
-This article presents a relational database schema for a trading application and examines what happens when a trade is executed, including how to handle fx conversion of monetary amounts and trade history via bi-temporal chaining. We look at some typical trade reporting use cases and associated sql queries, and show a simple way to run and test queries locally using an embedded [H2](https://www.h2database.com/html/main.html) in-memory database. 
-    
+This article presents a relational database schema for a trading application and examines what happens when a trade is executed, including how to handle fx conversion of monetary amounts, and handle trade history via bi-temporal chaining. We look at a few typical trade reporting use cases and associated sql queries, and show a simple way to run and test queries locally using an embedded [H2](https://www.h2database.com/html/main.html) in-memory database. 
+
 In the final section we discuss some of the different ways to access the database model within a Java application before choosing the 'ORM-alternative' database library [jOOQ](https://www.jooq.org) with a demo using a simple Spring Boot application. 
 
+All code is available in the [tradebook](https://github.com/stehrn/tradebook) GitHub repo. 
 
 # Domain Model
 From the previous article, we defined three key parts to the domain:
@@ -10,11 +11,11 @@ From the previous article, we defined three key parts to the domain:
 * _Trade_ - modifies positions in two books
 * _Position_ - total holding of a particular type of instrument in a book
 
-We should add to that an _Instrument_ which is the thing been traded 
+We should add to that an _Instrument_ which is the thing been traded.
 
 
 # Schema 
-Lets define the minimal schema to demonstrate what happens when a trade is booked.
+Lets define the minimal database schema to demonstrate what happens when a trade is booked.
 
 The `book` table will have a type (e.g. trading book with a profit centre versus customer book), denominated currency, name of trader (likely the desk head in charge, can be null if its a customer book), and legal entity - a distinct ring-fenced part of the business often based on geography with different entities for US , EMEA and APAC but may be broken down further. Once set up, this data wont generally change that often.
 ```sql
@@ -29,7 +30,7 @@ CREATE TABLE book (
 );
 ```
 
-An `instrument` is the thing been traded, it has a human readable name together with industry standard identifiers (e.g. ISIN, SEDOL), plus a bunch of attributes that will be used for pricing purposes. 
+An `instrument` is the thing been traded, it has a human readable name together with industry standard identifiers (e.g. ISIN, SEDOL), plus attributes that will be used for reporting and pricing purposes. 
 ```sql
 CREATE TABLE instrument (
   id INT AUTO_INCREMENT  PRIMARY KEY,
@@ -60,9 +61,7 @@ CREATE TABLE trade (
 
 A little trick can be used when inserting data into the `trade` table -  if (party for) book a is selling then `quantity` is negative, otherwise positive - this avoids having _case_ like statements in your sql but requires any business logic (in sql, source code, or elsewhere) to be aware of this convention.    
 
-
-
-The position table holds the _total_ holdings of an instrument in a book at a particular point in time. It could be tempting to use the trade table to derive the same aggregate view of the open position quantity, in practice its a bit more efficient to store position separately and avoid the trade table queries (even with well thought out indexes). Bear in mind this introduces the risk the trade and position tables don't match if an edit is done in one table but not the other. It should, however, always be possible to regenerate the position table from the trade table.      
+The `position` table holds the _total_ holdings of an instrument in a book at a particular point in time. It could be tempting to use the trade table to derive the same aggregate view of the open position quantity, in practice its a bit more efficient to store position separately and avoid the trade table queries (even with well thought out indexes). Bear in mind this introduces the risk the trade and position tables don't match if an edit is done in one table but not the other. It should, however, always be possible to regenerate the position table from the trade table.      
 ```sql
 CREATE TABLE position (
   book_id INT NOT NULL,
@@ -84,21 +83,22 @@ This in the final schema and relationships:
 
 Lets continue the example from the first article where we had this trade:
 ```
-{ "tradeDetails": {
-  "book_a": "US Eq Flow", 
-  "book_b": "Third Rock",
-  "trader": "Sammy Bruce",
-  "tradeType": "Sell",
-  "quantity": 10
-  "quantityUnit": "TSLA"
-  "unitPrice": 540.10
-  "unitCurrency": "USD"
-  ...
+{ 
+  "tradeDetails": {
+    "book_a": "US Eq Flow", 
+    "book_b": "Third Rock",
+    "trader": "Sammy Bruce",
+    "tradeType": "Sell",
+    "quantity": 10
+    "quantityUnit": "TSLA"
+    "unitPrice": 540.10
+    "unitCurrency": "USD"
+    ...
 }}
 ```  
 Lets assume ops have set up our books and the product team have set up the TSLA security (our entity is made up, the denomination is USD so it would probably be a US business line)
 
-`select * from book where entity where DISPLAY_NAME in ('US Eq Flow', 'Third Rock')`
+`select * from book where DISPLAY_NAME in ('US Eq Flow', 'Third Rock')`
 
 |ID |BOOK_TYPE  	|DENOMINATED  	|DISPLAY_NAME  	        |TRADER  	 |ENTITY  |
 |---|---------------|---------------|-----------------------|------------|--------|
@@ -210,7 +210,7 @@ Check out this very good [goldmansachs](https://goldmansachs.github.io/reladomo-
 ## A note on currencies
 We're dealing with monetary amounts in the `trade.unit_price` field with a currency defined in `trade.unit_ccy`. As such, we need to be very careful not to blindly sum up values that either directly or indirectly reference `unit_price` - it makes no sense adding 100 USD and 50 GBP to get to 150 what? If we need to aggregate values that reference `unit_price` then everything will need converting to the _same_ currency through the use of an _fx rate_ and a bit of simple fx conversion logic. 
 
-What fx rate to use? The currency we're converting _from_ is known (`trade.unit_ccy`), but what currency do we convert _to_? The one defined on the `book.denomicated` (currency) is a good indicator of what numbers should be reported in, although it should be easy to specify a target currency and do the conversion on-the-fly.
+What fx rate to use? It depends, the currency we're converting _from_ is known (`trade.unit_ccy`), but what currency do we convert _to_? The one defined on the `book.denomicated` (currency) is a good indicator of what numbers should be reported in, although it should be easy to specify a target currency and do the conversion on-the-fly.
 
 Lets look at a quick example, starting with an `FX_RATES` table: 
 ```
@@ -232,8 +232,8 @@ from   trade t,
 where  t.unit_ccy = fx.base_ccy
 and    fx.counter_ccy = 'EUR'
 ```
-In practice the rate would be loaded for given business date/time (i.e. add bi-temporal columns)
-  
+In practice the rate would be loaded for given business date/time (i.e. add bi-temporal columns).
+
 In the proceeding examples for simplicity we dont apply fx conversion (and we get away with since all trades are in USD)
 
 # Sample queries
@@ -327,7 +327,7 @@ ORDER  BY exposure DESC
 Note we've taken _trader_ to refer to the desk head associated with a book rather than the one involved in a single deal (and recorded on the `trade` table).
 
 # Using embedded H2 database inside browser to run sql queries
-A simple [Spring Boot](https://spring.io/projects/spring-boot) app using an embedded in memory [H2 database](https://www.h2database.com/html/main.html) created to test the schema and queries (based on this great [baeldung tutorial](https://www.baeldung.com/spring-boot-h2-database))
+A simple [Spring Boot](https://spring.io/projects/spring-boot) app using an embedded in memory [H2 database](https://www.h2database.com/html/main.html) was created to test the schema and queries (based on this great [baeldung tutorial](https://www.baeldung.com/spring-boot-h2-database)).
 
 To use, check out [tradebook](https://github.com/stehrn/tradebook) GitHub repo and: 
 
@@ -353,28 +353,30 @@ Object relational Mapping (ORM) turns things around, instead of the relational d
 
 (source [Martin Fowler](https://martinfowler.com/bliki/OrmHate.html))
 
-ORMs are great if you want to focus on your Java object model and avoid getting near anything that looks like sql; Martin Fowler provides a [good critique](https://martinfowler.com/bliki/OrmHate.html) of ORMs and points towards a non-relational database alternative - noSQL. noSQL, as the name implies, has no schema as such, for our trading application we'd probably store some sort of json representation of trades and positions like we saw in the first article: 
+ORMs are great if you want to focus on your Java object model and avoid getting near anything that looks like sql. Using an ORM means less code, with a lot of it been annotation and config driven. But if your data access patterns start to increase in complexity, or you need to squeeze out some extra performance, expect to start to mix in some "real" sql, which obviously dilutes the value of the ORM. Martin Fowler provides a [good critique](https://martinfowler.com/bliki/OrmHate.html) of ORMs and points towards a non-relational database alternative - [noSQL](https://en.wikipedia.org/wiki/NoSQL)... 
+
+noSQL, as the name implies, is non-SQL or non relational - data is not stored in tables - how data is stored depends on the choice of database, the main types are: key/value, document, graph, and object based. For our trading application we'd probably store some sort of json document representation of trades and positions like we saw in the first article: 
 
 ```
 { "book": "US Eq Flow", "instrument": "TSLA", "quantity": 290, "price": 156,950 
   "trades" [
-     { "id:" 8, "quantity": -10, "counterparty": "Third Rock Investments"},
+     { "id:" 8, "quantity": -10, "counterparty": "Third Rock"},
      { "id:" 7, "quantity": 200, "counterparty": "Blue Sky"},
-     { "id:" 6, "quantity": 50, "counterparty": "Third Rock Investments"},
-     { "id:" 5, "quantity": -50, "counterparty": "Third Rock Investments"},
-     { "id:" 4, "quantity": 100, "counterparty": "Third Rock Investments"},
+     { "id:" 6, "quantity": 50, "counterparty": "Third Rock"},
+     { "id:" 5, "quantity": -50, "counterparty": "Third Rock"},
+     { "id:" 4, "quantity": 100, "counterparty": "Third Rock"},
   ]
 }
 ```   
-Having no rigid schema can help with data and applications that are evolving - its easier to add something to a json message compared to adding a new column to a database table - e.g. we might decide to track settlement in the trade, to do so we just add this to any new json entries (note how old entries remain the same): 
+Storing documents can help with data and applications that are evolving - its easier to add something to a json document compared to adding a new column to a database table - e.g. we might decide to track settlement with the main trade details, to do so we just add this to any new json documents (note how old entries remain the same): 
 ```
 { "book": "US Eq Flow", "instrument": "TSLA", "quantity": 290, "price": 156,950 
   "trades" [
       ... 
-     { "id:" 8, "quantity": -10, "counterparty": "Third Rock Investments"},
-     { "id:" 9, "quantity": -10, "counterparty": "Third Rock Investments", "settlement": "T+2"}
+     { "id:" 8, "quantity": -10, "counterparty": "Third Rock"},
+     { "id:" 9, "quantity": -10, "counterparty": "Third Rock", "settlement": "T+2"}
 ```
-noSQL databases are also easy to scale horizontally, often run as a distributed cluster providing resilience - the cost here is giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex reporting queries and high transaction rates, whilst not adhering to ACID properties could mean losing real money. There are techniques to handle some of these issues and noSQL is still worth serious consideration.  
+noSQL databases are easy to scale horizontally, often run as a distributed cluster providing resilience - the cost here is giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex reporting queries and high transaction rates, whilst not adhering to ACID properties could mean losing real money. There are techniques to handle some of these issues and noSQL is still worth serious consideration.  
 
 Since our trading app already has a database model lets choose the 'ORM-alternative' database library [jOOQ Object Oriented Querying (jOOQ)](https://www.jooq.org), its tag-line sums it up - "the easiest way to write SQL in Java". The maven project [pom](pom.xml) contains a profile to auto-generate Java source - it  points to the schema file and the package name and directory for the generated source to be written to; to generate run:
 ```

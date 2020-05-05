@@ -62,7 +62,7 @@ INSERT INTO book (book_type, denominated, display_name, trader, entity) VALUES
   ('Profit Centre', 'EUR', 'ATEMP03', 'Jenny Osmond', 'PSEU'),
   ('Client Book', 'USD', 'Blue Sky', null, 'JAAM'),
   ('Profit Centre', 'USD', 'US Eq Flow', 'Sammy Bruce', 'EUCE'),
-  ('Client Book', 'USD', 'Third Rock Investments', null, 'EUCE');
+  ('Client Book', 'USD', 'Third Rock', null, 'EUCE');
 
 INSERT INTO instrument (name) VALUES
   ('XS0104440986'),
