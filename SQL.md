@@ -212,12 +212,32 @@ We're dealing with monetary amounts in the `trade.unit_price` field with a curre
 
 What fx rate to use? The currency we're converting _from_ is known (`trade.unit_ccy`), but what currency do we convert _to_? The one defined on the `book.denomicated` (currency) is a good indicator of what numbers should be reported in, although it should be easy to specify a target currency and do the conversion on-the-fly.
 
-A rate would be loaded for given business date/time and given currency pair, and may have been sourced from an external market data provider or contributed internally, perhaps by the fx desk.
+Lets look at a quick example, starting with an `FX_RATES` table: 
+```
+BASE_CCY        COUNTER_CCY     RATE           
+--------------- --------------- ----------------------  
+EUR             USD             1.090000            
+USD             EUR             0.910000
+GBP             USD             1.247000                
+USD             GBP             0.802000                        
+... 
+``` 
+The rate EUR/USD 1.09 (first row) means that one euro is exchanged for 1.09 US dollars - here, EUR is the base currency and USD is the counter currency (reporting currency). Where do the rates come from? Either sourced from an external market data provider or contributed internally e.g. by the fx desk.
+
+The query to convert `trade.unit_price` from the base currency (`trade.unit_ccy`) to a target reporting currency (we've chosen EUR) would look something like this:
+```
+select t.id, t.unit_price * fx.rate as "Price (EUR)"
+from   trade t,
+       fx_rates fx
+where  t.unit_ccy = fx.base_ccy
+and    fx.counter_ccy = 'EUR'
+```
+In practice the rate would be loaded for given business date/time (i.e. add bi-temporal columns)
   
 In the proceeding examples for simplicity we dont apply fx conversion (and we get away with since all trades are in USD)
 
 # Sample queries
-In all cases book_a is trader book and book_b is client book
+In all cases `book_a` is trader book and `book_b` is client book
 
 ## Find the current position of the firm 
 Determine how _long_ and _short_ the firm is on each of the securities it trades - a long position means instrument has been bought and is owned, short on the other hand means the instrument has not been bought yet and is owed to a another party. The `position` table makes this simple with a join on the `trade` table to only select firm side positions associated with a risk book: 
@@ -429,6 +449,8 @@ return dsl.select()
        .into(trade_book.DISPLAY_NAME, INSTRUMENT.NAME, TRADE.QUANTITY, TRADE.ID, client_book.DISPLAY_NAME)
        .intoArrays();
 ```  
+...whether you like this or not goes back to how close (coupled) you want your Java code to be to the persistence layer, there's no denying the code above is explicitly tied to the underlying database schema.  
+
 
 # Recap
 We've covered the domain model and schema for a simple trade application and some example sql for some common use cases. In many cases teams wont want to hand craft sql but rather delegate things to an ORM or ORM-alternative (or both). An ORM-alternative like jOOQ lets developers stay closer to the sql and relational model (even though they use Java to write it), some may want a bit more out of their Java library, to get a bit more for free and have a bit more abstraction so as not to have to literally replicate the sql query directly in Java code - this abstraction is what an ORM provides. Its worth noting an understanding of the underlying sql will certainly help when looking into bugs or dealing with support or non-functional issues such as slow performance. 

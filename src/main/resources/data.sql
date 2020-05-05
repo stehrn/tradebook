@@ -46,6 +46,14 @@ CREATE TABLE position (
   FOREIGN KEY (instrument_id) REFERENCES instrument(id)
 );
 
+DROP TABLE IF EXISTS fx_rates;
+
+CREATE TABLE fx_rates (
+  base_ccy CHAR(3) NOT NULL,
+  counter_ccy CHAR(3) NOT NULL,
+  rate DECIMAL(10,5) NOT NULL
+);
+
 -- test data
 
 INSERT INTO book (book_type, denominated, display_name, trader, entity) VALUES
@@ -97,3 +105,9 @@ INSERT INTO position (book_id, instrument_id, quantity) VALUES
 (2, 4, 80),
 (5, 5, 0),
 (6, 5, 0);
+
+INSERT INTO fx_rates (base_ccy, counter_ccy, rate) VALUES
+('EUR', 'USD', 1.090000),
+('USD', 'EUR', 0.910000),
+('GBP', 'USD', 1.247000),
+('USD', 'GBP', 0.802000);
