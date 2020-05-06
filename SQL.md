@@ -1,5 +1,5 @@
 # Overview 
-This article presents a relational database schema for a trading application and examines what happens when a trade is executed, including how to handle fx conversion of monetary amounts, and handle trade history via bi-temporal chaining. We look at a few typical trade reporting use cases and associated sql queries, and show a simple way to run and test queries locally using an embedded [H2](https://www.h2database.com/html/main.html) in-memory database. 
+This article presents a relational database schema for a trading application and examines what happens when a trade is executed, including how to apply fx conversion of monetary amounts, and handle trade history via bi-temporal chaining. We look at a few typical trade reporting use cases and associated sql queries, and show a simple way to run and test queries locally using an embedded [H2](https://www.h2database.com/html/main.html) in-memory database. 
 
 In the final section we discuss some of the different ways to access the database model within a Java application before choosing the 'ORM-alternative' database library [jOOQ](https://www.jooq.org) with a demo using a simple Spring Boot application. 
 
@@ -121,7 +121,7 @@ sql (book id's are from the book table):
 INSERT INTO trade (book_a, book_b, trader, trade_type, quantity, instrument_id, unit_price, unit_ccy) VALUES
   (5, 6, 'Sammy Bruce', 'B', -10, 8, 540.10, 'USD')
 ``` 
-(its a sell so we use that trick and make quantity -ve)
+(its a sell from the point of view of 'book a', the risk book, so the quantity is -ve)
 
 A trade modifies positions in two books, one book goes up by the quantity bought/sold, the other down by the same amount - the net effect across both books should always be zero. We'd expect the following increments (decrements) on the `position` table for the trade: 
 ```
@@ -222,7 +222,7 @@ GBP             USD             1.247000
 USD             GBP             0.802000                        
 ... 
 ``` 
-The rate EUR/USD 1.09 (first row) means that one euro is exchanged for 1.09 US dollars - here, EUR is the base currency and USD is the counter currency (reporting currency). Where do the rates come from? Either sourced from an external market data provider or contributed internally e.g. by the fx desk.
+The rate EUR/USD 1.09 (first row) means that one euro is exchanged for 1.09 US dollars - here, EUR is the base currency and USD is the counter currency (reporting currency). Where do the rates come from? Either sourced from an external market data provider like Reuters (e.g. EURUSD rate) or contributed internally e.g. by the fx desk.
 
 The query to convert `trade.unit_price` from the base currency (`trade.unit_ccy`) to a target reporting currency (we've chosen EUR) would look something like this:
 ```
@@ -375,6 +375,7 @@ Storing documents can help with data and applications that are evolving - its ea
       ... 
      { "id:" 8, "quantity": -10, "counterparty": "Third Rock"},
      { "id:" 9, "quantity": -10, "counterparty": "Third Rock", "settlement": "T+2"}
+  ... 
 ```
 noSQL databases are easy to scale horizontally, often run as a distributed cluster providing resilience - the cost here is giving up the 'C' of ACID (Consistency) and relying instead on _eventual_ consistency. You'd have to think hard about using noSQL for a trading application that can have complex reporting queries and high transaction rates, whilst not adhering to ACID properties could mean losing real money. There are techniques to handle some of these issues and noSQL is still worth serious consideration.  
 
