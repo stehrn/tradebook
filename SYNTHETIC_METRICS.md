@@ -76,7 +76,7 @@ actual CPU usage = average CPU * core count
 ### Memory
 If we’re paying for a server that has a decent amount of RAM then we’d hope its been used by the applications running on the server.
 
-Its worth noting high memory does not necessarily mean an application is busy doing stuff - it just means its reserved a large amout of memory, perhaps getting ready for when it does need to do a lot of stuff, this is typicaly of larger Java applications which might fix the heap at, say, 120GB; so the take-away here is to use this metric alongside other metrics like CPU usage.  
+Its worth noting high memory does not necessarily mean an application is busy doing stuff - it just means its reserved a large amount of memory, perhaps getting ready for when it does need to do a lot of stuff, this is typically of larger Java applications which might fix the heap at, say, 120GB; so the take-away here is to use this metric alongside other metrics like CPU usage.  
 
 *High memory good, low memory bad*
  
@@ -101,15 +101,14 @@ You’re going to want the following metrics:
 |CPU usage (%). |Percentage of CPU time spent running user applications and system functions|Add the average User, System, and Wait values|1 minute|
 |CPU number (cores)|Total number of CPU cores|Read from `/proc/cpuinfo`|60 minutes|
 |mem usage (%)|Percentage of virtual memory used|Read from `/proc/meminfo`|1 minute|
-(Assumed Linux host)
+
+(assumed Linux host)
 
 Real CPU usage can be derived as:
 ```
    (Real) CPU Usage (%) =  CPU usage (%) * CPU number
 ```
-How these are sourced depends on your setup, best case agents have been installed on the host to collect metrics into some sort of central repository which can be queried manually or programatically; Nimsoft probes are not uncommon, and prometheus and grafana are a decent  tool pair to provide reporting capabilities.
-
-TODO: link to prometheus and grafana. 
+How these are sourced depends on your setup, best case agents have been installed on the host to collect metrics into some sort of central repository which can be queried manually or programatically; [prometheus](https://prometheus.io) and [grafana](https://grafana.com) are often used to provide timeseries reporting capabilities (this prometheus [guide](https://prometheus.io/docs/guides/node-exporter/) shows how to monitor Linux metrics).
 
 #### Percentiles and the problem with averages
 What does 50% average CPU usage tell you? That on average, across a sampling period of, say, 24 hours, the CPU’s where 50% busy - but that could mean they were 50% for 100% of the time, or 100% busy for 50% of the time, or some variant in-between -the average does not tell us much about how the CPU usage was distributed over time.
@@ -134,7 +133,7 @@ So for hosts which are been decommissioned, things are reversed:
 # Putting everything together
 
 ## Synthetic metrics
-A synthetic metric (or indicator) is a value derived form the combination of other metrics, the metrics themselves are measuring some property or feature of something you are interested in understanding more about.
+A synthetic metric (or indicator) is a value derived from the combination of other metrics, the metrics themselves are measuring some property or feature of something you are interested in understanding more about.
 
 We’ve already seen there are multiple metrics to the problem space related to:
 * Cost
@@ -154,3 +153,17 @@ synthetic metric = (cost * cost weight)
 *High synthetic weight bad, low synthetic weight good*
 
 Note how we take the inverse (1 - x) in cases where high is good, and this is just one of many variants of the metric possible.
+
+### Weights
+Weights can help with tuning the metrics, to give more or less relevance to the things that are of importance to given analysis. For examaple, it may be known in advance that a large number of apps are running with a fixed memory footprint, and CPU usage is going to be used as the dominant measure of how active (busy) the applications are. It's also known there's a mix of server types with some older more expensive ones alongside cheaper commodity servers. Reasonable weights for the analysis might be: cost: 20; cpu: 8; mem: 5. Its a bit arbitrary what the actual values are, what's more importance are the values *relative* to one another. 
+
+### Apples and pears
+How to combine metrics when the units don't match - e.g. CPU percentage with a EUR cost? A special type of normalization called [feature scaling](https://en.wikipedia.org/wiki/Feature_scaling) can be used here to bring all values into the (0,1) range. CPU and memory are already in percentage units, so scaling need only be applied to cost.  
+
+## Next Steps
+Implementing the synthetic metric will depend on how data going into the metric can be sourced - ideally programmatically, in which case you may well have an application that hits a bunch of REST endpoints to source everything, generates the metric and dumps it into prometheus where you can add a grafana dashboard. 
+
+Generating a histogram of the normalized synthetic weights will help clearly show what to focus on - given high is bad, you're looking for a right skew, and should start with the hosts to the far right, these are the ones the metric has indicated either cost more, are using fewer system resources (or nearing retirement and using too much system resource), or both! Outliers will be hosts that are costing more than average but have near zero CPU usage - i.e. applications that don't do anything. 
+
+The more servers you need to manage, the more value the metric will provide as it will cut through the noise and highlight the servers that need to be looked at first. Combining server meta data, cost and usage data in one place can lead to other use cases as well - for example, if you're looking to move off-prem onto the cloud (increasingly likely) then this is exactly the data needed to find the right-sized compute and evaluate the cost benefits.
+
