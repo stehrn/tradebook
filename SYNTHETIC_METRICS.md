@@ -1,8 +1,8 @@
-# Using Synthetic Metrics to Help Reduce the Cost of Your Hardware Infrastructure
+# A Synthetic Metric to Help Reduce the Cost of Your Application Infrastructure
 
 This blog explores the use of *synthetics metrics* to help reduce the runnings costs of application platforms. We’ll discuss the infrastructure management process, which metrics are important and why, and how they can be combined into a synthetic metric to help with decision making.
 
-It covers some of the things an engineer building out and supporting an application needs to be mindful of, including CPU and memory characteristics to look out for when an application is running.
+It covers some of the things an engineer building out and supporting an application needs to be mindful of, including CPU and memory characteristics to look out for when an application is running, and guidance on how to design and implement the synthetic metric. 
 
 # The problem with change
 What do you do with a server that costs a lot of money and does not do much work? It sounds like the start of a (bad) joke, the answer, obviously, is to understand why its not doing much, and if there’s no good reason, save your cost centre some money and get rid of it. 
@@ -111,15 +111,13 @@ Real CPU usage can be derived as:
 How these are sourced depends on your setup, best case agents have been installed on the host to collect metrics into some sort of central repository which can be queried manually or programatically; [prometheus](https://prometheus.io) and [grafana](https://grafana.com) are often used to provide timeseries reporting capabilities (this prometheus [guide](https://prometheus.io/docs/guides/node-exporter/) shows how to monitor Linux metrics).
 
 #### Percentiles and the problem with averages
-What does 50% average CPU usage tell you? That on average, across a sampling period of, say, 24 hours, the CPU’s where 50% busy - but that could mean they were 50% for 100% of the time, or 100% busy for 50% of the time, or some variant in-between -the average does not tell us much about how the CPU usage was distributed over time.
+What does 50% average CPU usage tell you? That on average, across a sampling period of, say, 24 hours, the CPU’s where 50% busy - but that could mean they were 50% for 100% of the time, or 100% busy for 50% of the time, or some variant in-between -the average does not tell us much about how the CPU usage was distributed over time. The chart below illustrates this - both servers have the same average CPU, but the blue host has near zero CPU apart from a relatively short period when its near 100%, the green host, on the other hand, is using a constant (~8%) amount of CPU.
+
+![CPUs](img/cpus.png)
 
 There is where percentiles can help - lets start with the 90th percentile CPU usage - if 90% of the time the CPU is less than 50% and 10% of the time CPU usage is great than 50%, then 50% is the 90th percentile CPU usage. The same principal applies to any other percentile measure, common ones are 50, 75, 90, 95, and 99.
 
-One difference between the average and the percentile is the way outliers or extreme values affect the result - large outliers have a large impact on the average, since they are included as part of the average calculation. A host burst of very high CPU activity can pull the average up significantly, but assuming the burst was less than 5% of the total time, it would not impact the 95 percentile. 
-
-Here is an example where the 95 percentile is ~1% and the average is ~30% due to a continued high (near 100%) CPU usage for a short duration, whilst the rest of the time it was near zero. 
-
-TODO: chart
+One difference between the average and the percentile is the way outliers or extreme values affect the result - large outliers have a large impact on the average, since they are included as part of the average calculation. A host burst of very high CPU activity can pull the average up significantly, but assuming the burst was less than 5% of the total time, it would not impact the 95 percentile. In the above chart, the 95 percentile is ~1.5% and the average is ~8% due to the 100% CPU data points increasing the value. 
 
 Both metrics are clearly relevant, but they are telling us different things.
 
@@ -163,7 +161,9 @@ How to combine metrics when the units don't match - e.g. CPU percentage with a E
 ## Next Steps
 Implementing the synthetic metric will depend on how data going into the metric can be sourced - ideally programmatically, in which case you may well have an application that hits a bunch of REST endpoints to source everything, generates the metric and dumps it into prometheus where you can add a grafana dashboard. 
 
-Generating a histogram of the normalized synthetic weights will help clearly show what to focus on - given high is bad, you're looking for a right skew, and should start with the hosts to the far right, these are the ones the metric has indicated either cost more, are using fewer system resources (or nearing retirement and using too much system resource), or both! Outliers will be hosts that are costing more than average but have near zero CPU usage - i.e. applications that don't do anything. 
+Generating a histogram of the normalized synthetic weights will help clearly show what to focus on - given high is bad, you're looking for a right skew, and should start with the hosts to the far right, these are the ones the metric has indicated either cost more, are using fewer system resources (or nearing retirement and using too much system resource), or both! Outliers will be hosts that are costing more than average but have near zero CPU usage - i.e. the server either has no applicaitons running, or they are, but don't do anything. 
 
-The more servers you need to manage, the more value the metric will provide as it will cut through the noise and highlight the servers that need to be looked at first. Combining server meta data, cost and usage data in one place can lead to other use cases as well - for example, if you're looking to move off-prem onto the cloud (increasingly likely) then this is exactly the data needed to find the right-sized compute and evaluate the cost benefits.
+![synthetic](img/synthetic.png)
+
+The more servers you need to manage, the more value the metric will provide as it will cut through the noise and highlight the servers that need to be looked at first. Combining server meta data, cost and usage data in one place can lead to other use cases as well - for example, if you're looking to move off-prem onto the cloud (increasingly likely) then this is exactly the data needed to derive the compute requirements and evaluate the cost benefits.
 
